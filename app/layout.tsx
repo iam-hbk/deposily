@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -43,12 +44,21 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <main className="min-h-screen flex flex-col items-center">
-            <div className="flex-1 w-full flex flex-col gap-20 items-center">
-              <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16">
-                <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm gap-3">
+            <div className="flex-1 w-full flex flex-col  items-center relative ">
+              <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16 border sticky top-0 bg-transparent backdrop-blur-md z-10">
+                <div className="w-full flex justify-between items-center p-3 px-5 text-sm gap-3">
                   <div className="flex gap-5 items-center font-semibold">
-                    <Link className="font-bold" href={"/"}>
-                      Deposily
+                    <Link className="flex items-center justify-center" href="/">
+                      <Image
+                        src={"/logo-no-text.svg"}
+                        alt="Deposily Logo"
+                        width={62}
+                        height={62}
+                        className="rounded-lg dark:filter dark:grayscale dark:invert"
+                      />
+                      <span className="ml-2 text-2xl font-bold text-primary">
+                        Deposily
+                      </span>
                     </Link>
                   </div>
                   <div className="flex flex-row items-center space-x-4">
@@ -57,9 +67,7 @@ export default function RootLayout({
                   </div>
                 </div>
               </nav>
-              <div className="flex flex-col gap-20 max-w-5xl p-5">
-                {children}
-              </div>
+              <div className="flex flex-col w-full">{children}</div>
             </div>
           </main>
         </ThemeProvider>

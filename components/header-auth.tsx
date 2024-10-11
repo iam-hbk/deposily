@@ -56,7 +56,25 @@ export default async function AuthButton() {
       </form>
     </div>
   ) : (
-    <div className="flex gap-2">
+    <div className="flex gap-2 items-center space-x-4">
+      <Link
+        className="text-sm font-medium hover:underline underline-offset-4"
+        href="/#features"
+      >
+        Features
+      </Link>
+      <Link
+        className="text-sm font-medium hover:underline underline-offset-4"
+        href="/#pricing"
+      >
+        Pricing
+      </Link>
+      <Link
+        className="text-sm font-medium hover:underline underline-offset-4"
+        href="/#about"
+      >
+        About
+      </Link>
       <Button asChild size="sm" variant={"outline"}>
         <Link href="/sign-in">Sign in</Link>
       </Button>
