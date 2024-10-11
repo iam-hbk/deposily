@@ -18,12 +18,16 @@ export const createClient = () => {
               cookieStore.set(name, value, options);
             });
           } catch (error) {
+            console.error(
+              "Supabase client was unable to set cookies. because of the following error:",
+              error
+            );
             // The `set` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing
             // user sessions.
           }
         },
       },
-    },
+    }
   );
 };
