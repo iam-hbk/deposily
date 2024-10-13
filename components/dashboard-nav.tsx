@@ -11,24 +11,25 @@ import {
   FileText,
   Building,
   Settings,
+  NotebookTabs,
 } from "lucide-react";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Home },
-  { href: "/payers", label: "Payers", icon: Users },
-  { href: "/payments", label: "Payments", icon: CreditCard },
-  { href: "/statements", label: "Statements", icon: FileText },
-  { href: "/organizations", label: "Organizations", icon: Building },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard", label: "dashboard", icon: Home },
+  { href: "/dashboard/organizations", label: "organizations", icon: Building },
+  { href: "/dashboard/statements", label: "statements", icon: FileText },
+  { href: "/dashboard/payers", label: "payers", icon: Users },
+  { href: "/dashboard/payments", label: "payments", icon: CreditCard },
+  { href: "/dashboard/settings", label: "settings", icon: Settings },
+  { href: "/dashboard/notes", label: "notes", icon: NotebookTabs },
 ];
 
 export function DashboardNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-col w-64 bg-background border-r">
-      <div className="p-4 text-2xl font-bold text-primary">Deposily</div>
-      <div className="space-y-1">
+    <nav className="flex flex-col w-64 bg-background border-r over h-full">
+      <div className="space-y-1 p-2">
         {navItems.map((item) => (
           <Button
             key={item.href}
@@ -39,7 +40,7 @@ export function DashboardNav() {
             )}
             asChild
           >
-            <Link href={item.href}>
+            <Link href={item.href} className="capitalize">
               <item.icon className="mr-2 h-4 w-4" />
               {item.label}
             </Link>

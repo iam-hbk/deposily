@@ -1,77 +1,94 @@
-import { EnvVarWarning } from "@/components/env-var-warning";
-import HeaderAuth from "@/components/header-auth";
-import { ThemeSwitcher } from "@/components/theme-switcher";
-import { hasEnvVars } from "@/utils/supabase/check-env-vars";
-import { Urbanist as FontSans } from "next/font/google";
-import { ThemeProvider } from "next-themes";
-import "./globals.css";
-import Link from "next/link";
-import { cn } from "@/lib/utils";
-import Image from "next/image";
+import { Metadata } from 'next'
+import { Urbanist as FontSans, Bebas_Neue } from "next/font/google"
+import Image from "next/image"
+import Link from "next/link"
+import { createClient } from "@/lib/supabase/server";
+
+import { cn } from "@/lib/utils"
+import { hasEnvVars } from "@/lib/supabase/check-env-vars"
+import Providers from "@/components/providers"
+import { EnvVarWarning } from "@/components/env-var-warning"
+import HeaderAuth from "@/components/header-auth"
+import { ThemeSwitcher } from "@/components/theme-switcher"
+
+import "./globals.css"
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
-  : "http://localhost:3000";
+  : "http://localhost:3000"
 
 const fontSans = FontSans({
   subsets: ["latin"],
   variable: "--font-sans",
-});
+})
 
-export const metadata = {
+const fontBebas = Bebas_Neue({
+  subsets: ["latin"],
+  variable: "--font-bebas",
+  weight: ["400"],
+})
+
+export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title: "Deposily",
   description: "Manage deposits into your banking accounts",
-};
+}
 
-export default function RootLayout({
+async function getUser() {
+  const supabase = createClient()
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    return user
+  } catch (error) {
+    console.error('Error:', error)
+    return null
+  }
+}
+
+export default async function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
+  const user = await getUser()
+
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={cn(
           "min-h-screen bg-background font-sans antialiased",
-          fontSans.variable
+          fontSans.variable,
+          fontBebas.variable
         )}
       >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <main className="min-h-screen flex flex-col items-center">
-            <div className="flex-1 w-full flex flex-col  items-center relative ">
-              <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16 border sticky top-0 bg-transparent backdrop-blur-md z-10">
-                <div className="w-full flex justify-between items-center p-3 px-5 text-sm gap-3">
-                  <div className="flex gap-5 items-center font-semibold">
-                    <Link className="flex items-center justify-center" href="/">
-                      <Image
-                        src={"/logo-no-text.svg"}
-                        alt="Deposily Logo"
-                        width={62}
-                        height={62}
-                        className="rounded-lg dark:filter dark:grayscale dark:invert"
-                      />
-                      <span className="ml-2 text-2xl font-bold text-primary">
-                        Deposily
-                      </span>
-                    </Link>
-                  </div>
-                  <div className="flex flex-row items-center space-x-4">
-                    {!hasEnvVars ? <EnvVarWarning /> : <HeaderAuth />}
-                    <ThemeSwitcher />
-                  </div>
+        <Providers>
+          <div className="flex min-h-screen flex-col">
+            <header className="sticky top-0 z-50 w-full border-b border-b-foreground/10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+              <div className="container flex h-16 items-center justify-between px-4">
+                <Link href="/" className="flex items-center space-x-2">
+                  <Image
+                    src="/logo-no-text.svg"
+                    alt="Deposily Logo"
+                    width={32}
+                    height={32}
+                    className="rounded-lg dark:filter dark:grayscale dark:invert"
+                  />
+                  <span className="text-2xl font-bold text-primary font-bebas">
+                    Deposily
+                  </span>
+                </Link>
+                <div className="flex items-center space-x-4">
+                  {!hasEnvVars ? <EnvVarWarning /> : <HeaderAuth user={user} />}
+                  <ThemeSwitcher />
                 </div>
-              </nav>
-              <div className="flex flex-col w-full">{children}</div>
-            </div>
-          </main>
-        </ThemeProvider>
+              </div>
+            </header>
+            <main className="flex-1">
+              {children}
+            </main>
+          </div>
+        </Providers>
       </body>
     </html>
-  );
+  )
 }

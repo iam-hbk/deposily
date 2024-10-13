@@ -1,23 +1,21 @@
-// import { Providers } from "./providers";
 import { DashboardNav } from "@/components/dashboard-nav";
-// import { UserNav } from "@/components/user-nav";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
-export default function RootLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    // <Providers>
-    <div className="flex h-screen border">
-      <DashboardNav />
-      <div className="flex-1 flex flex-col">
-        <header className="border-b">
-          <div className="flex h-16 items-center px-4">{/* <UserNav /> */}</div>
-        </header>
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
-      </div>
+    <div className="flex overflow-hidden h-[calc(100vh-64px)]">
+      <aside className="w-64 border-r bg-background">
+        <DashboardNav />
+      </aside>
+      <main className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="container p-6">{children}</div>
+        </ScrollArea>
+      </main>
     </div>
-    // </Providers>
   );
 }
