@@ -28,6 +28,8 @@ import { toast } from "sonner";
 import { User } from "@supabase/supabase-js";
 import { User2 } from "lucide-react";
 import { Tables } from "@/lib/supabase/database.types";
+import { Badge } from "./ui/badge";
+import { Separator } from "./ui/separator";
 
 // Define Zod schema for form validation
 const formSchema = z.object({
@@ -81,6 +83,11 @@ export default function UserProfileModal({
           <DialogTitle>Edit profile</DialogTitle>
           <DialogDescription>
             Make changes to your profile here. Click save when you&apos;re done.
+          </DialogDescription>
+          <Separator orientation="horizontal" />
+          <DialogDescription>
+            Your email address is{" "}
+            <Badge variant={"secondary"}>{user.email}</Badge>
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
