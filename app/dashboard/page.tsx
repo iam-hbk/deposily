@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, CreditCard, Building } from "lucide-react";
 
+
+
+// TODO: Make this right, should pull data based on current user id 
 async function getDashboardData() {
   const supabase = createClient();
 

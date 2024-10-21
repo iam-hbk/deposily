@@ -86,6 +86,11 @@ export default async function AuthButton({ user }: { user: User | null }) {
     return (
       <div className="flex items-center gap-4">
         No profile found for {user.email}
+        <form action={signOutAction}>
+        <Button type="submit" variant={"outline"}>
+          Sign out
+        </Button>
+      </form>
       </div>
     );
   }

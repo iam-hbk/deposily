@@ -32,9 +32,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical, ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
-import { Tables } from "@/lib/supabase/database.types";
+import { OrganizationWithAdminProfiles } from "@/lib/supabase/database.types";
+import { format, parseISO } from "date-fns";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
-const columns: ColumnDef<Tables<"organizations">>[] = [
+const columns: ColumnDef<OrganizationWithAdminProfiles>[] = [
   {
     accessorKey: "name",
     header: ({ column }) => {
@@ -53,7 +61,7 @@ const columns: ColumnDef<Tables<"organizations">>[] = [
       );
     },
     cell: ({ row }) => (
-      <Button asChild variant={"link"} className="capitalize">
+      <Button asChild variant="link" className="capitalize">
         <Link href={`/dashboard/organizations/${row.original.organization_id}`}>
           {row.getValue("name")}
         </Link>
@@ -61,14 +69,12 @@ const columns: ColumnDef<Tables<"organizations">>[] = [
     ),
   },
   {
-    accessorKey: "payersCount",
-    header: "Payers",
-    cell: ({ row }) => (
-      <div className="text-center">{row.getValue("payersCount")}</div>
-    ),
+    accessorKey: "type",
+    header: "Type",
+    cell: ({ row }) => <div className="capitalize">{row.getValue("type")}</div>,
   },
   {
-    accessorKey: "createdAt",
+    accessorKey: "created_at",
     header: ({ column }) => {
       return (
         <Button
@@ -85,7 +91,32 @@ const columns: ColumnDef<Tables<"organizations">>[] = [
       );
     },
     cell: ({ row }) => (
-      <div>{new Date(row.getValue("createdAt")).toLocaleDateString()}</div>
+      <div>{format(parseISO(row.getValue("created_at")), "PPP")}</div>
+    ),
+  },
+  {
+    accessorKey: "profiles",
+    header: "Admins",
+    cell: ({ row }) => (
+      <div className="flex flex-wrap gap-1">
+        {row.original.admins.map((profile, index) => (
+          <TooltipProvider key={index}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="secondary" className="cursor-help">
+                  {profile.first_name} {profile.last_name}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>
+                  {profile.first_name} {profile.last_name}
+                </p>
+                <p>Role: {profile.role}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ))}
+      </div>
     ),
   },
   {
@@ -128,7 +159,7 @@ const columns: ColumnDef<Tables<"organizations">>[] = [
 export function OrganizationsTable({
   data,
 }: {
-  data: Tables<"organizations">[];
+  data: OrganizationWithAdminProfiles[];
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);

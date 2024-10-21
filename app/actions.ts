@@ -20,7 +20,11 @@ export const signUpAction = async (formData: FormData) => {
     password,
     options: {
       emailRedirectTo: `${origin}/auth/callback`,
-      // data:{}
+      data: {
+        first_name: formData.get("first_name")?.toString() ?? "",
+        last_name: formData.get("last_name")?.toString() ?? "",
+        role: formData.get("role")?.toString() ?? "admin",
+      },
     },
     // phone: "", there is a phone number field as well so no need to add it in the options
   });

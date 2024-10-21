@@ -69,7 +69,6 @@ export default function UserProfileModal({
     });
   };
 
-  // console.log("profile,user", profile, user);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

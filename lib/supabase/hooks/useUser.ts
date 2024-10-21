@@ -33,7 +33,6 @@ export function useUser() {
 
 export function useGetProfile(user: User) {
   const supabase = createClient();
-  console.log("###############", user);
 
   if (!user) {
     throw new Error("User is not logged in");
@@ -70,9 +69,15 @@ export function useUpdateProfile(user: User) {
       first_name: string;
       last_name: string;
     }) => {
+      const { id, email } = user;
+      if (!id || !email) {
+        throw new Error("User ID or email is missing");
+      }
+
       const { error } = await supabase.from("profiles").upsert({
         ...updatedProfile,
-        id: user.id,
+        id,
+        email,
       });
 
       if (error) throw error;
