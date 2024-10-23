@@ -4,41 +4,44 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, CreditCard, Building } from "lucide-react";
 
-
-
-// TODO: Make this right, should pull data based on current user id 
-async function getDashboardData() {
+async function getDashboardData(userId: string) {
   const supabase = createClient();
 
   const [
     { count: payersCount },
     { count: paymentsCount },
     { count: organizationsCount },
-    {
-      data: { user },
-    },
   ] = await Promise.all([
-    supabase.from("payers").select("*", { count: "exact", head: true }),
-    supabase.from("payments").select("*", { count: "exact", head: true }),
-    supabase.from("organizations").select("*", { count: "exact", head: true }),
-    supabase.auth.getUser(),
+    supabase
+      .from("payers")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId),
+    supabase
+      .from("payments")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId),
+    supabase
+      .from("organizations")
+      .select("*", { count: "exact", head: true })
+      .eq("created_by", userId),
   ]);
 
   return {
     totalPayers: payersCount || 0,
     totalPayments: paymentsCount || 0,
     totalOrganizations: organizationsCount || 0,
-    user,
   };
 }
 
-export default async function dashboardPage() {
-  const { totalPayers, totalPayments, totalOrganizations, user } =
-    await getDashboardData();
+export default async function DashboardPage() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return redirect("/sign-in");
+    redirect("/sign-in");
   }
+
+  const { totalPayers, totalPayments, totalOrganizations } = await getDashboardData(user.id);
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -78,12 +81,6 @@ export default async function dashboardPage() {
             This is a dashboard page that you can only see as an authenticated
             user
           </div>
-        </div>
-        <div className="flex flex-col gap-2 items-start">
-          <h2 className="font-bold text-2xl mb-4">Your user details</h2>
-          <pre className="text-xs font-mono p-3 rounded border max-h-32 overflow-auto">
-            {JSON.stringify(user, null, 2)}
-          </pre>
         </div>
       </div>
     </div>

@@ -2,9 +2,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { User } from "@supabase/supabase-js";
 
+const supabase = createClient();
 export function useUser() {
-  const supabase = createClient();
-
   const {
     data: user,
     isLoading,
@@ -32,8 +31,6 @@ export function useUser() {
 }
 
 export function useGetProfile(user: User) {
-  const supabase = createClient();
-
   if (!user) {
     throw new Error("User is not logged in");
   }
@@ -57,7 +54,6 @@ export function useGetProfile(user: User) {
 }
 
 export function useUpdateProfile(user: User) {
-  const supabase = createClient();
   const queryClient = useQueryClient();
 
   if (!user) {

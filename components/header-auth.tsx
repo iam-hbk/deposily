@@ -80,17 +80,25 @@ export default async function AuthButton({ user }: { user: User | null }) {
     .select("*")
     .eq("id", user.id)
     .single();
-  console.error(error, data);
+  if (error) {
+    console.error("Error fetching profile:", error);
+    return (
+      <div>
+        Error fetching profile. Please try again ({user.email}).
+        {/* <pre className="border">{JSON.stringify(error, null, 2)}</pre> */}
+      </div>
+    );
+  }
 
-  if(!data) {
+  if (!data) {
     return (
       <div className="flex items-center gap-4">
         No profile found for {user.email}
         <form action={signOutAction}>
-        <Button type="submit" variant={"outline"}>
-          Sign out
-        </Button>
-      </form>
+          <Button type="submit" variant={"outline"}>
+            Sign out
+          </Button>
+        </form>
       </div>
     );
   }

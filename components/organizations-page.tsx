@@ -1,3 +1,4 @@
+// components/organizations-page.tsx
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
@@ -6,40 +7,66 @@ import { MessageSquareTextIcon, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OrganizationsTable } from "@/components/organizations-table";
 import { AddOrganizationModal } from "@/components/add-organization-dialog";
-import { User } from "@supabase/supabase-js";
 import { OrganizationWithAdminProfiles } from "@/lib/supabase/database.types";
-
-
+import { createClient } from "@/lib/supabase/client";
 
 interface ClientOrganizationsPageProps {
-  user: User;
-  organizations: OrganizationWithAdminProfiles[];
+  userId: string;
 }
 
-export function Organizations({
-  user,
-  organizations,
-}: ClientOrganizationsPageProps) {
+const getOrganizationsWithProfiles = async (userId: string) => {
+  const supabase = createClient();
+  const { data: organizations, error: orgError } = await supabase
+    .from("organizations")
+    .select("*")
+    .eq("created_by", userId);
+
+  if (orgError) {
+    throw new Error("Error fetching organizations");
+  }
+
+  const adminIds = [...new Set(organizations.flatMap((org) => org.admins))];
+
+  const { data: profiles, error: profileError } = await supabase
+    .from("profiles")
+    .select("*")
+    .in("id", adminIds);
+
+  if (profileError) {
+    throw new Error("Error fetching profiles");
+  }
+
+  return organizations.map((org) => ({
+    ...org,
+    admins:
+      org.admins?.map((adminId) => {
+        const profile = profiles.find((profile) => profile.id === adminId);
+        return {
+          email: profile?.email || "",
+          first_name: profile?.first_name || null,
+          id: profile?.id || "",
+          last_name: profile?.last_name || null,
+          role: profile?.role || null,
+        };
+      }) || [],
+  }));
+};
+
+export function Organizations({ userId }: ClientOrganizationsPageProps) {
   const {
-    data: organizationsData,
+    data: organizations,
     isLoading,
     error,
-  } = useQuery({
-    queryKey: ["organizations", user.id],
-    queryFn: () => Promise.resolve(organizations),
-    initialData: organizations,
+  } = useQuery<OrganizationWithAdminProfiles[], Error>({
+    queryKey: ["organizations", userId],
+    queryFn: () => getOrganizationsWithProfiles(userId),
   });
-
-  if (!user) {
-    return <div>Please log in to view organizations.</div>;
-  }
 
   if (isLoading) {
     return <div>Loading...</div>;
   }
 
   if (error) {
-    console.error("Error fetching organizations:", error);
     return (
       <div>
         Error loading organizations. Please try again.
@@ -54,7 +81,7 @@ export function Organizations({
         <h1 className="text-3xl font-bold">Organizations</h1>
         <AddOrganizationModal />
       </div>
-      <OrganizationsTable data={organizationsData} />
+      <OrganizationsTable data={organizations || []} />
 
       {organizations && organizations.length === 0 && (
         <Alert className="max-w-md bg-gray-100">

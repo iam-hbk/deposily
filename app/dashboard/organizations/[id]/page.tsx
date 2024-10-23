@@ -9,6 +9,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PayersTable } from "@/components/payers-table";
 import { OrganizationActions } from "@/components/organization-actions";
+import { FilesTable } from "@/components/bank-statements-table";
+import { FileUpload } from "@/components/fileUpload";
 
 async function getOrganization(id: string) {
   const supabase = createClient();
@@ -102,6 +104,7 @@ export default async function OrganizationPage({
       <Tabs defaultValue="payers" className="w-full">
         <TabsList>
           <TabsTrigger value="payers">Payers</TabsTrigger>
+          <TabsTrigger value="statements">Bank Statements</TabsTrigger>
           <TabsTrigger value="admins">Admins</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
@@ -115,6 +118,27 @@ export default async function OrganizationPage({
             </CardHeader>
             <CardContent>
               <PayersTable payers={organization.payers} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="statements">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex flex-row justify-between">
+                <h2>Bank Statements</h2>
+
+                <FileUpload
+                  organizationId={organization.organization_id}
+                  organization_created_by={organization.created_by}
+                  organization_name={organization.name}
+                />
+              </CardTitle>
+              <CardDescription>
+                Manage bank statements for this organization
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FilesTable organization_id={organization.organization_id} />
             </CardContent>
           </Card>
         </TabsContent>

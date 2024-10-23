@@ -79,13 +79,14 @@ export function AddOrganizationModal() {
   const mutation = useMutation({
     mutationFn: createOrganization,
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      console.log("Organization created by:", data.created_by);
+      queryClient.invalidateQueries({ queryKey: ["organizations",data.created_by] });
       setOpen(false);
       form.reset();
       toast.success("Organization created", {
         description: "Your new organization has been successfully created.",
       });
-      console.log("Organization created:", data);
+      // console.log("Organization created:", data);
     },
     onError: (error) => {
       toast.error("Error", {

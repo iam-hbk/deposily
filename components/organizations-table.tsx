@@ -102,8 +102,8 @@ const columns: ColumnDef<OrganizationWithAdminProfiles>[] = [
         {row.original.admins.map((profile, index) => (
           <TooltipProvider key={index}>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge variant="secondary" className="cursor-help">
+              <TooltipTrigger >
+                <Badge variant="secondary" className="p-2">
                   {profile.first_name} {profile.last_name}
                 </Badge>
               </TooltipTrigger>
