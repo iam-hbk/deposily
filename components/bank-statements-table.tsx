@@ -26,6 +26,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   MoreVertical,
   Trash2,
   Download,
@@ -36,6 +41,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useGetOrganizationBankStatements } from "@/lib/supabase/hooks/useBankStatement";
+import { useGetAnyAdminProfileById } from "@/lib/supabase/hooks/useUser";
 
 interface FileData {
   file_id: number;
@@ -49,6 +55,27 @@ interface FileData {
 
 const columnHelper = createColumnHelper<FileData>();
 
+const UploaderCell = ({ userId }: { userId: string }) => {
+  const { data: profile, isLoading, error } = useGetAnyAdminProfileById(userId);
+
+  if (isLoading) return <span>Loading...</span>;
+  if (error) return <span>Error loading profile</span>;
+  if (!profile) return <span>Unknown user</span>;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger>
+        <Badge
+          variant={"secondary"}
+        >{`${profile.first_name} ${profile.last_name}`}</Badge>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>{profile.email}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+};
+
 const columns = [
   columnHelper.accessor("file_path", {
     header: "File Name",
@@ -59,6 +86,7 @@ const columns = [
   }),
   columnHelper.accessor("uploaded_by", {
     header: "Uploaded By",
+    cell: (info) => <UploaderCell userId={info.getValue()} />,
   }),
   columnHelper.accessor("uploaded_at", {
     header: "Uploaded At",
@@ -69,8 +97,8 @@ const columns = [
     cell: (info) => (
       <Badge
         className={cn({
-          "bg-green-500": info.getValue(),
-          "bg-yellow-500": !info.getValue(),
+          "border-green-600 text-green-600 bg-green-100": info.getValue(),
+          "border-yellow-500 text-yellow-600 bg-yellow-100": !info.getValue(),
         })}
         variant="outline"
       >

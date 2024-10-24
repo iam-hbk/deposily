@@ -38,7 +38,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
@@ -100,21 +99,19 @@ const columns: ColumnDef<OrganizationWithAdminProfiles>[] = [
     cell: ({ row }) => (
       <div className="flex flex-wrap gap-1">
         {row.original.admins.map((profile, index) => (
-          <TooltipProvider key={index}>
-            <Tooltip>
-              <TooltipTrigger >
-                <Badge variant="secondary" className="p-2">
-                  {profile.first_name} {profile.last_name}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>
-                  {profile.first_name} {profile.last_name}
-                </p>
-                <p>Role: {profile.role}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Tooltip key={index}>
+            <TooltipTrigger>
+              <Badge variant="secondary" className="p-2">
+                {profile.first_name} {profile.last_name}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>
+                {profile.first_name} {profile.last_name}
+              </p>
+              <p>Role: {profile.role}</p>
+            </TooltipContent>
+          </Tooltip>
         ))}
       </div>
     ),

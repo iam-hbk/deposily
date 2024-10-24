@@ -89,3 +89,22 @@ export function useUpdateProfile(user: User) {
     },
   });
 }
+
+export function useGetAnyAdminProfileById(id: string) {
+  return useQuery({
+    queryKey: ["profile", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("first_name, last_name, email")
+        .eq("id", id)
+        .eq("role", "admin")
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 30, // 30 minutes
+  });
+}
