@@ -37,11 +37,13 @@ import {
   Edit,
   ChevronUp,
   ChevronDown,
+  Copy,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useGetOrganizationBankStatements } from "@/lib/supabase/hooks/useBankStatement";
 import { useGetAnyAdminProfileById } from "@/lib/supabase/hooks/useUser";
+import { toast } from "sonner";
 
 interface FileData {
   file_id: number;
@@ -125,9 +127,15 @@ const FileActions = ({ file }: { file: FileData }) => (
       <DropdownMenuItem
         onClick={() => navigator.clipboard.writeText(file.file_id.toString())}
       >
-        Copy file ID
+        <Copy className="mr-2 h-4 w-4" /> Copy file ID
       </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => alert(`Download ${file.file_path}`)}>
+      <DropdownMenuItem
+        onClick={() => {
+          toast("Download", {
+            description: `Downloading ${file.file_path}`,
+          });
+        }}
+      >
         <Download className="mr-2 h-4 w-4" /> Download file
       </DropdownMenuItem>
       <DropdownMenuItem onClick={() => alert(`Edit ${file.file_path}`)}>

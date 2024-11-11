@@ -116,6 +116,7 @@ export type CompositeTypes<
     ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never;
 
+/** Custom types */
 export type PayerWithReferences = MergeDeep<
   Tables<"payers">,
   { references: Tables<"references">[] }

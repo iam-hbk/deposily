@@ -125,7 +125,7 @@ export default async function OrganizationPage({
           <Card>
             <CardHeader>
               <CardTitle className="flex flex-row justify-between">
-                <h2>Bank Statements</h2>
+                <div>Bank Statements</div>
 
                 <FileUpload
                   organizationId={organization.organization_id}
