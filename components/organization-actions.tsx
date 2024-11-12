@@ -9,13 +9,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { OrganizationWithPayers } from "@/lib/supabase/database.types";
+import { Tables } from "@/lib/supabase/database.types";
 import { MoreHorizontal } from "lucide-react";
 
 export function OrganizationActions({
   organization,
 }: {
-  organization: OrganizationWithPayers;
+  organization: Tables<"organizations">;
 }) {
   return (
     <DropdownMenu>

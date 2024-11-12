@@ -153,41 +153,45 @@ export type Database = {
       payments: {
         Row: {
           amount: number
+          bank_statement_id: number
           created_at: string | null
-          gateway: string | null
-          payer_id: string | null
+          organization_id: number | null
           payment_id: number
-          status: string | null
           transaction_reference: string | null
           updated_at: string | null
         }
         Insert: {
           amount: number
+          bank_statement_id: number
           created_at?: string | null
-          gateway?: string | null
-          payer_id?: string | null
+          organization_id?: number | null
           payment_id?: number
-          status?: string | null
           transaction_reference?: string | null
           updated_at?: string | null
         }
         Update: {
           amount?: number
+          bank_statement_id?: number
           created_at?: string | null
-          gateway?: string | null
-          payer_id?: string | null
+          organization_id?: number | null
           payment_id?: number
-          status?: string | null
           transaction_reference?: string | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "payment_payer_id_fkey"
-            columns: ["payer_id"]
+            foreignKeyName: "payments_bank_statement_id_fkey"
+            columns: ["bank_statement_id"]
             isOneToOne: false
-            referencedRelation: "payers"
-            referencedColumns: ["user_id"]
+            referencedRelation: "bank-statements"
+            referencedColumns: ["file_id"]
+          },
+          {
+            foreignKeyName: "payments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["organization_id"]
           },
         ]
       }

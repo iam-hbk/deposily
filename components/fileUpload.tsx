@@ -89,6 +89,8 @@ export function FileUpload({ organizationId }: FileUploadProps) {
     formData.append("file", data.file);
     formData.append("fileName", data.fileName);
     formData.append("organizationId", organizationId.toString());
+    formData.append("orgCreatedBy", user?.id || "");
+    formData.append("orgName", user?.email || "");
     formData.append("processFile", data.processFile.toString());
 
     try {

@@ -72,6 +72,7 @@ export default async function RootLayout({
                     width={32}
                     height={32}
                     className="rounded-lg dark:filter dark:grayscale dark:invert"
+                    style={{ width: 'auto', height: 'auto' }}
                   />
                   <span className="text-2xl font-bold text-primary font-bebas">
                     Deposily
