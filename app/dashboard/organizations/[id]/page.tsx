@@ -129,8 +129,6 @@ export default async function OrganizationPage({
 
                 <FileUpload
                   organizationId={organization.organization_id}
-                  organization_created_by={organization.created_by}
-                  organization_name={organization.name}
                 />
               </CardTitle>
               <CardDescription>

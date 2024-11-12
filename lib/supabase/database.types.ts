@@ -1,6 +1,5 @@
 import { MergeDeep } from "type-fest";
 import { Database as DatabaseGenerated } from "./database-gen.types";
-// export { Json } from './database-gen.types'
 
 // Override the type for a specific column in a view:
 export type Database = MergeDeep<
@@ -18,6 +17,7 @@ export type Database = MergeDeep<
     };
   }
 >;
+// Update below on each db generation
 
 type PublicSchema = Database[Extract<keyof Database, "public">];
 
@@ -116,6 +116,7 @@ export type CompositeTypes<
     ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never;
 
+// Custom types
 export type PayerWithReferences = MergeDeep<
   Tables<"payers">,
   { references: Tables<"references">[] }
