@@ -58,9 +58,6 @@ export function FileUpload({
       .upload(filePath, selectedFile, {
         cacheControl: "3600",
         upsert: false,
-        // onUploadProgress: (progress) => {
-        //   setUploadProgress(progress.percent || 0);
-        // },
         metadata: {
           organization_id: organizationId.toString(),
           uploaded_by: user.id,
