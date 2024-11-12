@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { PayersTable } from "@/components/payers-table";
+import { PaymentsTable } from "@/components/payments-table";
 
 async function getOrganization(id: string) {
   const supabase = createClient();
@@ -103,6 +104,8 @@ export default async function OrganizationPage({
           <PayersTable payers={organization.payers} />
         </CardContent>
       </Card>
+
+      <PaymentsTable organizationId={parseInt(params.id)} />
     </>
   );
 }

@@ -34,7 +34,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 const schema = z.object({
   fileName: z.string().min(1, "File name is required"),
-  processFile: z.boolean().default(false),
+  processFile: z.boolean().default(true),
   file: z.instanceof(File).nullable(),
 });
 
@@ -78,6 +78,7 @@ export function FileUpload({ organizationId }: FileUploadProps) {
 
       if (!response.ok) {
         const error = await response.json();
+        console.log("Error", error);
         throw new Error(error.error || "Failed to upload file");
       }
 
