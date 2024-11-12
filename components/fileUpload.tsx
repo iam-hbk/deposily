@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -31,11 +30,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { processBankStatement } from "@/app/actions/process-bank-statement";
-
-interface FileUploadProps {
-  organizationId: number;
-}
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 const schema = z.object({
   fileName: z.string().min(1, "File name is required"),
@@ -45,10 +40,14 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+interface FileUploadProps {
+  organizationId: number;
+}
+
 export function FileUpload({ organizationId }: FileUploadProps) {
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [uploadProgress, setUploadProgress] = React.useState(0);
+  const [isOpen, setIsOpen] = useState(false);
   const { user } = useUser();
+  const queryClient = useQueryClient();
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -56,6 +55,42 @@ export function FileUpload({ organizationId }: FileUploadProps) {
       fileName: "",
       processFile: false,
       file: null,
+    },
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: async (data: FormData) => {
+      if (!data.file || !user) {
+        throw new Error("Please select a file and ensure you're logged in");
+      }
+
+      const formData = new FormData();
+      formData.append("file", data.file);
+      formData.append("fileName", data.fileName);
+      formData.append("processFile", data.processFile.toString());
+      formData.append("orgCreatedBy", user.id);
+      formData.append("orgName", user.email || "");
+
+      const response = await fetch(`/api/organizations/${organizationId}/statements`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to upload file");
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      toast.success("File uploaded successfully");
+      handleClose();
+      // Invalidate and refetch
+      queryClient.invalidateQueries({ queryKey: ["statements", organizationId] });
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to upload file");
     },
   });
 
@@ -75,36 +110,11 @@ export function FileUpload({ organizationId }: FileUploadProps) {
 
   const handleClose = () => {
     setIsOpen(false);
-    setUploadProgress(0);
     form.reset();
   };
 
-  const onSubmit = async (data: FormData) => {
-    if (!data.file) {
-      toast.error("Please select a file first");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("file", data.file);
-    formData.append("fileName", data.fileName);
-    formData.append("organizationId", organizationId.toString());
-    formData.append("orgCreatedBy", user?.id || "");
-    formData.append("orgName", user?.email || "");
-    formData.append("processFile", data.processFile.toString());
-
-    try {
-      const result = await processBankStatement(formData);
-      if (result.error) {
-        toast.error(result.error);
-      } else {
-        toast.success("File uploaded successfully");
-        handleClose();
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("An error occurred while processing the file");
-    }
+  const onSubmit = (data: FormData) => {
+    uploadMutation.mutate(data);
   };
 
   if (!user) {
@@ -192,10 +202,6 @@ export function FileUpload({ organizationId }: FileUploadProps) {
                     />
                   </div>
                 )}
-
-                {uploadProgress > 0 && (
-                  <Progress value={uploadProgress} className="mt-4" />
-                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button type="button" onClick={handleClose} variant="outline">
@@ -203,11 +209,11 @@ export function FileUpload({ organizationId }: FileUploadProps) {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={!form.watch("file") || form.formState.isSubmitting}
+                  disabled={!form.watch("file") || uploadMutation.isPending}
                 >
-                  {form.formState.isSubmitting ? (
+                  {uploadMutation.isPending ? (
                     <>
-                      <Loader className="mr-2 w-4 h-4 animate-spin" /> Upload
+                      <Loader className="mr-2 w-4 h-4 animate-spin" /> Uploading...
                     </>
                   ) : (
                     "Upload"

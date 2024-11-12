@@ -40,8 +40,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useGetOrganizationBankStatements } from "@/lib/supabase/hooks/useBankStatement";
 import { useGetAnyAdminProfileById } from "@/lib/supabase/hooks/useUser";
+import { useQuery } from "@tanstack/react-query";
 
 interface FileData {
   file_id: number;
@@ -141,8 +141,16 @@ const FileActions = ({ file }: { file: FileData }) => (
 );
 
 export function FilesTable({ organization_id }: { organization_id: number }) {
-  const { data, error, isLoading } =
-    useGetOrganizationBankStatements(organization_id);
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["statements", organization_id],
+    queryFn: async () => {
+      const response = await fetch(`/api/organizations/${organization_id}/statements`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch statements");
+      }
+      return response.json();
+    },
+  });
 
   const table = useReactTable({
     data: data || [],
@@ -157,14 +165,8 @@ export function FilesTable({ organization_id }: { organization_id: number }) {
     },
   });
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-
-  if (error) {
-    return <div>Error: {error.message}</div>;
-  }
-
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error loading statements</div>;
   if (!data || data.length === 0) {
     return <div>No files uploaded</div>;
   }
