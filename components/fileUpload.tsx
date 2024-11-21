@@ -11,15 +11,16 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader, UploadCloud } from "lucide-react";
 import { useUser } from "@/lib/supabase/hooks/useUser";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Form,
@@ -31,6 +32,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Progress } from "@/components/ui/progress";
 
 const schema = z.object({
   fileName: z.string().min(1, "File name is required"),
@@ -48,6 +50,8 @@ export function FileUpload({ organizationId }: FileUploadProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { user } = useUser();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -71,27 +75,48 @@ export function FileUpload({ organizationId }: FileUploadProps) {
       formData.append("orgCreatedBy", user.id);
       formData.append("orgName", user.email || "");
 
-      const response = await fetch(`/api/organizations/${organizationId}/statements`, {
-        method: "POST",
-        body: formData,
+      const xhr = new XMLHttpRequest();
+      return new Promise((resolve, reject) => {
+        xhr.upload.addEventListener("progress", (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = (event.loaded / event.total) * 100;
+            setUploadProgress(percentComplete);
+          }
+        });
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText));
+          } else {
+            reject(new Error(xhr.statusText));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error("Network Error"));
+
+        xhr.open("POST", `/api/organizations/${organizationId}/statements`);
+        xhr.send(formData);
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        console.log("Error", error);
-        throw new Error(error.error || "Failed to upload file");
-      }
-
-      return response.json();
     },
     onSuccess: () => {
-      toast.success("File uploaded successfully");
+      toast.success("File uploaded successfully", {
+        description:
+          "You will be redirected to the extracted transactions page.",
+        dismissible: true,
+        duration: 10000,
+      });
       handleClose();
       // Invalidate and refetch
-      queryClient.invalidateQueries({ queryKey: ["statements", organizationId] });
+      queryClient.invalidateQueries({
+        queryKey: ["statements", organizationId],
+      });
+      // navigate to the organization main page
+      router.push(`/dashboard/organizations/${organizationId}`);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to upload file");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to upload file"
+      );
     },
   });
 
@@ -110,8 +135,11 @@ export function FileUpload({ organizationId }: FileUploadProps) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop });
 
   const handleClose = () => {
-    setIsOpen(false);
-    form.reset();
+    if (!uploadMutation.isPending) {
+      setIsOpen(false);
+      form.reset();
+      setUploadProgress(0);
+    }
   };
 
   const onSubmit = (data: FormData) => {
@@ -127,7 +155,7 @@ export function FileUpload({ organizationId }: FileUploadProps) {
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={(open) => !uploadMutation.isPending && setIsOpen(open)}>
       <DialogTrigger asChild>
         <Button>
           <UploadCloud className="mr-2 w-4 h-4" /> Upload Bank Statement
@@ -203,9 +231,27 @@ export function FileUpload({ organizationId }: FileUploadProps) {
                     />
                   </div>
                 )}
+                {uploadMutation.isPending && (
+                  <div className="mt-4">
+                    <Progress value={uploadProgress} className="w-full" />
+                    <p className="text-sm text-center mt-2">
+                      {uploadProgress < 100
+                        ? `Uploading: ${Math.round(uploadProgress)}%`
+                        : "Processing file... This may take a few minutes."}
+                    </p>
+                    <p className="text-xs text-center mt-1 text-muted-foreground">
+                      Please keep this window open. We&apos;ll let you know when it&apos;s done!
+                    </p>
+                  </div>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button type="button" onClick={handleClose} variant="outline">
+                <Button
+                  type="button"
+                  onClick={handleClose}
+                  variant="outline"
+                  disabled={uploadMutation.isPending}
+                >
                   Cancel
                 </Button>
                 <Button
@@ -214,7 +260,8 @@ export function FileUpload({ organizationId }: FileUploadProps) {
                 >
                   {uploadMutation.isPending ? (
                     <>
-                      <Loader className="mr-2 w-4 h-4 animate-spin" /> Uploading...
+                      <Loader className="mr-2 w-4 h-4 animate-spin" />{" "}
+                      {uploadProgress < 100 ? "Uploading..." : "Processing..."}
                     </>
                   ) : (
                     "Upload"

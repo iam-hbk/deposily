@@ -139,30 +139,47 @@ export async function POST(
       if (processFile) {
         const result = await parseFile(file);
 
-        //Write the result to a file
-        console.log(
-          "\n\n----------------\n\n Results",
-          result,
-          "\n\n------------\n\n"
-        );
-
         if ("code" in result) {
           throw new Error(result.message);
         }
 
-        const { error: paymentsError } = await supabase.from("payments").insert(
-          result.transactions.map((transaction) => ({
-            amount: transaction.amount,
-            date: transaction.date,
-            transaction_reference: transaction.transaction_reference,
-            bank_statement_id: statementData.file_id,
-            organization_id: parseInt(params.organizationId),
-            created_at: new Date().toISOString(),
-          }))
-        );
+        for (const transaction of result.transactions) {
+          const { data: existingRef } = await supabase
+            .from("references")
+            .select("*")
+            .eq("reference_details", transaction.transaction_reference)
+            .eq("organization_id", parseInt(params.organizationId))
+            .single();
 
-        if (paymentsError) {
-          throw paymentsError;
+          if (existingRef) {
+            // Insert into payments if reference exists
+            const { error: paymentsError } = await supabase.from("payments").insert({
+              amount: transaction.amount,
+              date: transaction.date,
+              transaction_reference: transaction.transaction_reference,
+              bank_statement_id: statementData.file_id,
+              organization_id: parseInt(params.organizationId),
+              created_at: new Date().toISOString(),
+            });
+
+            if (paymentsError) {
+              throw paymentsError;
+            }
+          } else {
+            // Insert into unallocated_payments if no reference
+            const { error: unallocatedError } = await supabase.from("unallocated_payments").insert({
+              amount: transaction.amount,
+              date: transaction.date,
+              transaction_reference: transaction.transaction_reference,
+              organization_id: parseInt(params.organizationId),
+              bank_statement_id: statementData.file_id,
+              created_at: new Date().toISOString(),
+            });
+
+            if (unallocatedError) {
+              throw unallocatedError;
+            }
+          }
         }
 
         // Update bank statement as processed

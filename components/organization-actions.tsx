@@ -11,12 +11,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tables } from "@/lib/supabase/database.types";
 import { MoreHorizontal } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export function OrganizationActions({
   organization,
 }: {
   organization: Tables<"organizations">;
 }) {
+  const router = useRouter();
+
+  const handleNewPayer = () => {
+    router.push(`/dashboard/organizations/${organization.organization_id}/payers`);
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -33,7 +40,7 @@ export function OrganizationActions({
           Copy organization ID
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => alert("Add new payer")}>
+        <DropdownMenuItem onClick={handleNewPayer}>
           Add new payer
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => alert("Invite new admin")}>

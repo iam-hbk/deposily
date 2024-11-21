@@ -19,42 +19,49 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { Tables } from "@/lib/supabase/database.types";
 import { format } from "date-fns";
+import { PlusIcon, MoreVertical, UserPlus, UserCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { AssignPayementModal } from "./assign-payement-modal";
 
-import { Badge } from "@/components/ui/badge";
-
-type PaymentWithReferenceStatus = Tables<"payments"> & {
-  has_reference: boolean;
-};
-
-interface PaymentsTableProps {
+interface UnallocatedPaymentsTableProps {
   organizationId: number;
 }
 
-export function PaymentsTable({ organizationId }: PaymentsTableProps) {
+export function UnallocatedPaymentsTable({
+  organizationId,
+}: UnallocatedPaymentsTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
-
+  const [selectedPayment, setSelectedPayment] =
+    useState<Tables<"unallocated_payments"> | null>(null);
   const supabase = createClient();
+  const queryClient = useQueryClient();
+  const router = useRouter();
 
-  const { data: payments, isLoading } = useQuery({
-    queryKey: ["payments", organizationId],
+  const { data: unallocatedPayments, isLoading } = useQuery({
+    queryKey: ["unallocated_payments", organizationId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("payments")
+        .from("unallocated_payments")
         .select("*")
         .eq("organization_id", organizationId)
         .order("date", { ascending: false });
 
       if (error) throw error;
-
-      return data as PaymentWithReferenceStatus[];
+      return data;
     },
   });
 
-  const columns: ColumnDef<PaymentWithReferenceStatus>[] = [
+  const columns: ColumnDef<Tables<"unallocated_payments">>[] = [
     {
       accessorKey: "date",
       header: "Date",
@@ -63,21 +70,6 @@ export function PaymentsTable({ organizationId }: PaymentsTableProps) {
     {
       accessorKey: "transaction_reference",
       header: "Reference",
-      cell: ({ row }) => {
-        const reference = row.getValue("transaction_reference") as
-          | string
-          | null;
-        const hasReference = row.original.has_reference;
-
-        return (
-          <div className="flex items-center gap-2">
-            <span>{reference}</span>
-            {reference && !hasReference && (
-              <Badge variant="secondary">New Reference</Badge>
-            )}
-          </div>
-        );
-      },
     },
     {
       accessorKey: "amount",
@@ -91,10 +83,45 @@ export function PaymentsTable({ organizationId }: PaymentsTableProps) {
         return formatted;
       },
     },
+    {
+      id: "actions",
+      cell: ({ row }) => {
+        const payment = row.original;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setSelectedPayment(payment)}>
+                <span className="flex items-center gap-2">
+                  <UserCheck className="w-4 h-4" />
+                  Assign
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  router.push(
+                    `/dashboard/organizations/${organizationId}/payers`
+                  )
+                }
+              >
+                <span className="flex items-center gap-2">
+                  <UserPlus className="w-4 h-4" />
+                  Create Payer
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
   ];
 
   const table = useReactTable({
-    data: payments || [],
+    data: unallocatedPayments || [],
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -106,14 +133,17 @@ export function PaymentsTable({ organizationId }: PaymentsTableProps) {
   });
 
   if (isLoading) {
-    return <div>Loading payments...</div>;
+    return <div>Loading unallocated payments...</div>;
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Payments</h2>
-        <Button>Add Payment</Button>
+    <div className="my-4 flex flex-col gap-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-semibold">Unallocated Payments</h2>
+        <Button variant="outline">
+          <PlusIcon className="w-4 h-4 mr-2" />
+          Add Payment
+        </Button>
       </div>
       <div className="rounded-md border">
         <Table>
@@ -153,7 +183,7 @@ export function PaymentsTable({ organizationId }: PaymentsTableProps) {
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No payments found.
+                  No unallocated payments found.
                 </TableCell>
               </TableRow>
             )}
@@ -178,6 +208,21 @@ export function PaymentsTable({ organizationId }: PaymentsTableProps) {
           Next
         </Button>
       </div>
+
+      {selectedPayment && (
+        <AssignPayementModal
+          open={!!selectedPayment}
+          onOpenChange={(open) => !open && setSelectedPayment(null)}
+          reference={selectedPayment.transaction_reference || ""}
+          organizationId={organizationId}
+          onAssigned={() => {
+            queryClient.invalidateQueries({
+              queryKey: ["unallocated_payments", organizationId],
+            });
+            setSelectedPayment(null);
+          }}
+        />
+      )}
     </div>
   );
 }

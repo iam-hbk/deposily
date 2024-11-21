@@ -12,8 +12,12 @@ export function OrganizationNav({ organizationId }: { organizationId: string }) 
       label: "Overview",
     },
     {
+      href: `/dashboard/organizations/${organizationId}/payers`,
+      label: "Payers",
+    },
+    {
       href: `/dashboard/organizations/${organizationId}/statements`,
-      label: "Bank Statements",
+      label: "Statements",
     },
     {
       href: `/dashboard/organizations/${organizationId}/admins`,

@@ -8,6 +8,8 @@ import {
 } from "@/components/ui/card";
 import { PayersTable } from "@/components/payers-table";
 import { PaymentsTable } from "@/components/payments-table";
+import { UnallocatedPaymentsTable } from "@/components/unallocated-payments-table";
+import { Separator } from "@/components/ui/separator";
 
 async function getOrganization(id: string) {
   const supabase = createClient();
@@ -16,9 +18,8 @@ async function getOrganization(id: string) {
     .select(
       `
       *,
-      payers (
-          *,
-          references(
+      references (
+          payers (
               *
           )
       )
@@ -61,7 +62,9 @@ export default async function OrganizationPage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">{organization.payers.length}</p>
+            <p className="text-3xl font-bold">
+              {organization.references.length}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -96,15 +99,29 @@ export default async function OrganizationPage({
       <Card>
         <CardHeader>
           <CardTitle>Payers</CardTitle>
-          <CardDescription>
-            Manage payers for this organization
-          </CardDescription>
+          <CardDescription>Manage payers for this organization</CardDescription>
         </CardHeader>
         <CardContent>
-          <PayersTable payers={organization.payers} />
+          <PayersTable
+            payers={
+              organization.references
+                .map((reference) => reference.payers)
+                .filter(Boolean) as {
+                email: string;
+                first_name: string;
+                last_name: string | null;
+                phone_number: string;
+                user_id: string;
+              }[]
+            }
+            organizationId={params.id}
+          />
         </CardContent>
       </Card>
 
+      {/* <PaymentsTable organizationId={parseInt(params.id)} /> */}
+      <UnallocatedPaymentsTable organizationId={parseInt(params.id)} />
+      <Separator />
       <PaymentsTable organizationId={parseInt(params.id)} />
     </>
   );

@@ -117,38 +117,27 @@ export type Database = {
       }
       payers: {
         Row: {
-          email: string | null
-          first_name: string | null
+          email: string
+          first_name: string
           last_name: string | null
-          organization_id: number | null
-          phone_number: string | null
+          phone_number: string
           user_id: string
         }
         Insert: {
-          email?: string | null
-          first_name?: string | null
+          email: string
+          first_name: string
           last_name?: string | null
-          organization_id?: number | null
-          phone_number?: string | null
-          user_id: string
-        }
-        Update: {
-          email?: string | null
-          first_name?: string | null
-          last_name?: string | null
-          organization_id?: number | null
-          phone_number?: string | null
+          phone_number: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "payer_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["organization_id"]
-          },
-        ]
+        Update: {
+          email?: string
+          first_name?: string
+          last_name?: string | null
+          phone_number?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       payments: {
         Row: {
@@ -157,8 +146,9 @@ export type Database = {
           created_at: string | null
           date: string
           organization_id: number | null
+          payer_id: string | null
           payment_id: number
-          transaction_reference: string | null
+          transaction_reference: string
           updated_at: string | null
         }
         Insert: {
@@ -167,8 +157,9 @@ export type Database = {
           created_at?: string | null
           date: string
           organization_id?: number | null
+          payer_id?: string | null
           payment_id?: number
-          transaction_reference?: string | null
+          transaction_reference: string
           updated_at?: string | null
         }
         Update: {
@@ -177,8 +168,9 @@ export type Database = {
           created_at?: string | null
           date?: string
           organization_id?: number | null
+          payer_id?: string | null
           payment_id?: number
-          transaction_reference?: string | null
+          transaction_reference?: string
           updated_at?: string | null
         }
         Relationships: [
@@ -195,6 +187,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["organization_id"]
+          },
+          {
+            foreignKeyName: "payments_payer_id_fkey"
+            columns: ["payer_id"]
+            isOneToOne: false
+            referencedRelation: "payers"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -261,6 +260,54 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "payers"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      unallocated_payments: {
+        Row: {
+          amount: number
+          bank_statement_id: number
+          created_at: string
+          date: string
+          is_allocated: boolean
+          organization_id: number
+          transaction_reference: string
+          unallocated_payment_id: number
+        }
+        Insert: {
+          amount: number
+          bank_statement_id: number
+          created_at?: string
+          date: string
+          is_allocated?: boolean
+          organization_id: number
+          transaction_reference: string
+          unallocated_payment_id?: number
+        }
+        Update: {
+          amount?: number
+          bank_statement_id?: number
+          created_at?: string
+          date?: string
+          is_allocated?: boolean
+          organization_id?: number
+          transaction_reference?: string
+          unallocated_payment_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unallocated_payments_bank_statement_id_fkey"
+            columns: ["bank_statement_id"]
+            isOneToOne: false
+            referencedRelation: "bank-statements"
+            referencedColumns: ["file_id"]
+          },
+          {
+            foreignKeyName: "unallocated_payments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["organization_id"]
           },
         ]
       }
@@ -403,100 +450,3 @@ export type Database = {
     }
   }
 }
-
-type PublicSchema = Database[Extract<keyof Database, "public">]
-
-export type Tables<
-  PublicTableNameOrOptions extends
-    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-        Database[PublicTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
-    }
-    ? R
-    : never
-  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
-        PublicSchema["Views"])
-    ? (PublicSchema["Tables"] &
-        PublicSchema["Views"])[PublicTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
-    : never
-
-export type TablesInsert<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
-    : never
-
-export type TablesUpdate<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
-    : never
-
-export type Enums<
-  PublicEnumNameOrOptions extends
-    | keyof PublicSchema["Enums"]
-    | { schema: keyof Database },
-  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = PublicEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
-    ? PublicSchema["Enums"][PublicEnumNameOrOptions]
-    : never
-
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof PublicSchema["CompositeTypes"]
-    | { schema: keyof Database },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
-  }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
-    ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
