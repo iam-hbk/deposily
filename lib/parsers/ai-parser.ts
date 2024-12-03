@@ -1,30 +1,10 @@
-"use server";
-
-// import { openai } from "@ai-sdk/openai";
 import { mistral } from "@ai-sdk/mistral";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { parse } from "csv-parse/sync";
-import fs from "fs/promises";
-import path from "path";
 import { Tables } from "@/lib/supabase/database.types";
 
-// Define common bank statement headers and keywords
-// const COMMON_BANK_HEADERS = [
-//   "date",
-//   "description", 
-//   "amount",
-//   "balance",
-//   "transaction",
-//   "credit",
-//   "debit",
-//   "reference",
-//   "payment",
-//   "withdrawal",
-//   "deposit",
-// ];
-
-// Common banking terms to look for in PDFs
+// Constants for validation
 const BANKING_TERMS = [
   "account",
   "statement",
@@ -38,7 +18,6 @@ const BANKING_TERMS = [
   "account number",
 ];
 
-// South African banks and their abbreviations
 const SA_BANKS = [
   { name: "First National Bank", abbr: "FNB" },
   { name: "ABSA Bank", abbr: "ABSA" },
@@ -50,6 +29,7 @@ const SA_BANKS = [
   { name: "Discovery Bank", abbr: "DISC" },
 ];
 
+// Type definitions
 interface ValidationError {
   code:
     | "INVALID_FILE_TYPE"
@@ -59,9 +39,6 @@ interface ValidationError {
   message: string;
 }
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
-
-// Define the return type for successful parsing
 type ParsedTransaction = Omit<
   Tables<"payments">,
   | "payment_id"
@@ -71,17 +48,18 @@ type ParsedTransaction = Omit<
   | "bank_statement_id"
 >;
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
+
+// Main parsing function
 export async function parseFile(
   file: File
 ): Promise<{ transactions: ParsedTransaction[] } | ValidationError> {
-  // Check file size
   if (file.size > MAX_FILE_SIZE) {
     return {
       code: "FILE_TOO_LARGE",
       message: "File size exceeds 10MB limit",
     };
   }
-  console.log("File size good");
 
   const fileType = file.name.split(".").pop()?.toLowerCase();
   if (!["pdf", "csv"].includes(fileType ?? "")) {
@@ -90,93 +68,78 @@ export async function parseFile(
       message: "Only PDF and CSV files are supported",
     };
   }
-  console.log("File type good ", fileType);
-
-  // Create temp directory if it doesn't exist
-  const tempDir = path.join(process.cwd(), "tmp");
-  try {
-    await fs.access(tempDir);
-  } catch {
-    await fs.mkdir(tempDir);
-  }
-  console.log("Temp dir created", tempDir);
-  // Write file to temp directory
-  const tempFilePath = path.join(tempDir, `temp-${Date.now()}-${file.name}`);
-  const buffer = await file.arrayBuffer();
-  await fs.writeFile(tempFilePath, new Uint8Array(buffer));
-
-  console.log("File written to temp dir", tempFilePath);
 
   try {
+    const content = await file.text();
+
     if (fileType === "pdf") {
-      const pdfContent = await fs.readFile(tempFilePath, "utf8");
-      // First try traditional validation
-      const traditionalValidation = validatePdfTraditionally(pdfContent);
-
-      if (traditionalValidation.isValid) {
-        console.log("Traditional validation passed");
-        return extractTransactionsWithAI(pdfContent);
-      }
-
-      // If content is less than half a page (roughly 1500 chars), reject
-      if (pdfContent.length < 1500) {
-        console.log("PDF content too short to be a valid bank statement");
-        return {
-          code: "NOT_A_BANK_STATEMENT",
-          message: "PDF content too short to be a valid bank statement",
-        };
-      }
-
-      // Try AI validation as fallback for longer content
-      const aiValidation = await validateBankStatement(pdfContent);
-      if (!aiValidation.isValid) {
-        console.log("AI validation failed", aiValidation.message);
-        return {
-          code: "NOT_A_BANK_STATEMENT",
-          message: aiValidation.message,
-        };
-      }
-      console.log("AI validation passed, extracting transactions");
-      return extractTransactionsWithAI(pdfContent);
+      return handlePdfContent(content);
     } else if (fileType === "csv") {
-      const text = await fs.readFile(tempFilePath, "utf8");
-      const validation = await validateCsvBankStatement(text);
-      if (!validation.isValid) {
-        console.log("CSV validation failed", validation.message);
-        return {
-          code: "NOT_A_BANK_STATEMENT",
-          message: validation.message,
-        };
-      }
-      console.log("CSV validation passed, parsing CSV");
-      return parseCsv(text);
+      return handleCsvContent(content);
     }
 
     throw new Error("Unsupported file type");
   } catch (error) {
-    console.log("Error parsing file", error);
+    console.error("Error parsing file:", error);
     return {
       code: "PROCESSING_ERROR",
       message:
         error instanceof Error ? error.message : "Unknown error occurred",
     };
-  } finally {
-    // Clean up temp file
-    try {
-      await fs.unlink(tempFilePath);
-    } catch (error) {
-      console.error("Error cleaning up temp file:", error);
-    }
   }
 }
 
+// PDF handling
+async function handlePdfContent(
+  content: string
+): Promise<{ transactions: ParsedTransaction[] } | ValidationError> {
+  const traditionalValidation = validatePdfTraditionally(content);
+
+  if (traditionalValidation.isValid) {
+    return extractTransactionsWithAI(content);
+  }
+
+  if (content.length < 1500) {
+    return {
+      code: "NOT_A_BANK_STATEMENT",
+      message: "PDF content too short to be a valid bank statement",
+    };
+  }
+
+  const aiValidation = await validateBankStatement(content);
+  if (!aiValidation.isValid) {
+    return {
+      code: "NOT_A_BANK_STATEMENT",
+      message: aiValidation.message,
+    };
+  }
+
+  return extractTransactionsWithAI(content);
+}
+
+// CSV handling
+async function handleCsvContent(
+  content: string
+): Promise<{ transactions: ParsedTransaction[] } | ValidationError> {
+  const validation = await validateCsvBankStatement(content);
+  if (!validation.isValid) {
+    return {
+      code: "NOT_A_BANK_STATEMENT",
+      message: validation.message,
+    };
+  }
+
+  return parseCsv(content);
+}
+
+// Validation functions
 function validatePdfTraditionally(content: string): {
   isValid: boolean;
   message: string;
 } {
   const contentLower = content.toLowerCase();
 
-  // Check for common banking terms
+  // Check for banking terms
   const hasBankingTerms = BANKING_TERMS.some((term) =>
     contentLower.includes(term.toLowerCase())
   );
@@ -202,7 +165,7 @@ function validatePdfTraditionally(content: string): {
     };
   }
 
-  // Look for date patterns (various formats)
+  // Check for date patterns
   const hasDatePatterns =
     /\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(content);
 
@@ -213,7 +176,7 @@ function validatePdfTraditionally(content: string): {
     };
   }
 
-  // Look for currency/amount patterns
+  // Check for currency patterns
   const hasCurrencyPatterns = /R\s*\d+[.,]\d{2}|\d+[.,]\d{2}\s*R/.test(content);
 
   if (!hasCurrencyPatterns) {
@@ -234,23 +197,26 @@ async function validateCsvBankStatement(text: string): Promise<{
   message: string;
 }> {
   try {
-    // Parse CSV with relaxed options to handle inconsistent columns
-    const records = parse(text, { 
+    const records = parse(text, {
       skip_empty_lines: true,
-      relax_column_count: true, // Allow inconsistent column counts
-      columns: false // Don't try to parse headers
+      relax_column_count: true,
+      columns: false,
     });
 
     if (records.length === 0) {
       return { isValid: false, message: "CSV file is empty" };
     }
-    // Convert all records to string for easier searching
-    const contentString = records.map((row: string[]) => row.join(' ')).join(' ').toLowerCase();
 
-    // Check for bank identifiers in the full content
-    const hasBankIdentifiers = SA_BANKS.some(bank => 
-      contentString.includes(bank.name.toLowerCase()) ||
-      contentString.includes(bank.abbr.toLowerCase())
+    const contentString = records
+      .map((row: string[]) => row.join(" "))
+      .join(" ")
+      .toLowerCase();
+
+    // Check for bank identifiers
+    const hasBankIdentifiers = SA_BANKS.some(
+      (bank) =>
+        contentString.includes(bank.name.toLowerCase()) ||
+        contentString.includes(bank.abbr.toLowerCase())
     );
 
     if (!hasBankIdentifiers) {
@@ -261,7 +227,7 @@ async function validateCsvBankStatement(text: string): Promise<{
     }
 
     // Check for banking terms
-    const hasBankingTerms = BANKING_TERMS.some(term => 
+    const hasBankingTerms = BANKING_TERMS.some((term) =>
       contentString.includes(term.toLowerCase())
     );
 
@@ -272,7 +238,7 @@ async function validateCsvBankStatement(text: string): Promise<{
       };
     }
 
-    // Check for numeric values (amounts)
+    // Check for numeric values
     const hasNumericValues = /\d+[.,]\d{2}/.test(contentString);
 
     if (!hasNumericValues) {
@@ -283,7 +249,7 @@ async function validateCsvBankStatement(text: string): Promise<{
     }
 
     return { isValid: true, message: "" };
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("Error validating CSV:", error);
     return {
       isValid: false,
@@ -296,11 +262,7 @@ async function validateBankStatement(content: string): Promise<{
   isValid: boolean;
   message: string;
 }> {
-  /**
-   * Validate the bank statement using AI
-   */
   const { object } = await generateObject({
-    // model: openai("gpt-4"),
     model: mistral("mistral-large-latest"),
     schema: z.object({
       isValid: z.boolean(),
@@ -335,28 +297,23 @@ async function validateBankStatement(content: string): Promise<{
 async function parseCsv(
   text: string
 ): Promise<{ transactions: ParsedTransaction[] }> {
-  const records = parse(text, { 
+  const records = parse(text, {
     skip_empty_lines: true,
-    relax_column_count: true, // Allow inconsistent columns
-    columns: false // Don't try to parse headers
+    relax_column_count: true,
+    columns: false,
   });
+
   const csvString = records
     .map((record: string[]) => record.join(", "))
     .join("\n");
+
   return extractTransactionsWithAI(csvString);
 }
 
 async function extractTransactionsWithAI(
   content: string
 ): Promise<{ transactions: ParsedTransaction[] }> {
-  console.log(
-    "\n\n\nContent to analyze\n\n-----------------\n\n",
-    content,
-    "\n\n-----------------\n\n"
-  );
-
   const { object } = await generateObject({
-    // model: openai("gpt-4"),
     model: mistral("mistral-large-latest"),
     schema: z.object({
       isValidStatement: z.boolean(),
@@ -397,8 +354,8 @@ async function extractTransactionsWithAI(
   return {
     transactions: (object.transactions || []).map((transaction) => ({
       ...transaction,
-      payer_id: "", // Set a default value or retrieve the actual payer_id
-      reference_on_deposit: "", // Set a default value or retrieve the actual reference_on_deposit
+      payer_id: "",
+      reference_on_deposit: "",
     })),
   };
 }
