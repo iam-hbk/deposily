@@ -395,6 +395,10 @@ async function extractTransactionsWithAI(
   }
 
   return {
-    transactions: object.transactions || [],
+    transactions: (object.transactions || []).map((transaction) => ({
+      ...transaction,
+      payer_id: "", // Set a default value or retrieve the actual payer_id
+      reference_on_deposit: "", // Set a default value or retrieve the actual reference_on_deposit
+    })),
   };
 }
