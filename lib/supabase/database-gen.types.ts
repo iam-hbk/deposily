@@ -148,6 +148,7 @@ export type Database = {
           organization_id: number | null
           payer_id: string | null
           payment_id: number
+          reference_on_deposit: string | null
           transaction_reference: string
           updated_at: string | null
         }
@@ -159,6 +160,7 @@ export type Database = {
           organization_id?: number | null
           payer_id?: string | null
           payment_id?: number
+          reference_on_deposit?: string | null
           transaction_reference: string
           updated_at?: string | null
         }
@@ -170,6 +172,7 @@ export type Database = {
           organization_id?: number | null
           payer_id?: string | null
           payment_id?: number
+          reference_on_deposit?: string | null
           transaction_reference?: string
           updated_at?: string | null
         }

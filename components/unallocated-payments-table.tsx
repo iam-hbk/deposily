@@ -31,7 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { AssignPayementModal } from "./assign-payement-modal";
+import { AssignPaymentModal } from "./assign-payement-modal";
 
 interface UnallocatedPaymentsTableProps {
   organizationId: number;
@@ -208,12 +208,11 @@ export function UnallocatedPaymentsTable({
           Next
         </Button>
       </div>
-
       {selectedPayment && (
-        <AssignPayementModal
+        <AssignPaymentModal
           open={!!selectedPayment}
           onOpenChange={(open) => !open && setSelectedPayment(null)}
-          reference={selectedPayment.transaction_reference || ""}
+          unallocatedPayment={selectedPayment}
           organizationId={organizationId}
           onAssigned={() => {
             queryClient.invalidateQueries({

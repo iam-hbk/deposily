@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import {
   Dialog,
@@ -8,37 +6,53 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
 import { Tables } from "@/lib/supabase/database.types";
-import { toast } from "sonner";
+import { PayerAssignmentCard } from "./PayerAssignmentCard";
 
-interface AssignPayerModalProps {
+interface AssignPaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  reference: string;
+  unallocatedPayment: Tables<"unallocated_payments">;
   organizationId: number;
   onAssigned: () => void;
 }
 
-export function AssignPayementModal({
+export function AssignPaymentModal({
   open,
   onOpenChange,
-  reference,
+  unallocatedPayment,
   organizationId,
   onAssigned,
-}: AssignPayerModalProps) {
+}: AssignPaymentModalProps) {
   const [search, setSearch] = useState("");
   const supabase = createClient();
 
   const { data: payers, isLoading } = useQuery({
     queryKey: ["payers", organizationId, search],
     queryFn: async () => {
+      const { data: orgRefs, error: refsError } = await supabase
+        .from("references")
+        .select("payer_id")
+        .eq("organization_id", organizationId);
+
+      if (refsError) throw refsError;
+
+      const payerIds = [...new Set(orgRefs.map(ref => ref.payer_id))];
+
+      if (payerIds.length === 0) return [];
+
       const query = supabase
         .from("payers")
-        .select("*")
-        .eq("organization_id", organizationId);
+        .select(`
+          *,
+          references!references_payer_id_fkey (
+            reference_details,
+            organization_id
+          )
+        `)
+        .in("user_id", payerIds);
 
       if (search) {
         query.or(
@@ -52,71 +66,8 @@ export function AssignPayementModal({
     },
   });
 
-  async function assignPayment(payer: Tables<"payers">) {
-    try {
-      // Check if the reference already exists for this payer
-      const { data: existingRef } = await supabase
-        .from("references")
-        .select("*")
-        .eq("reference_details", reference)
-        .eq("organization_id", organizationId)
-        .eq("payer_id", payer.user_id)
-        .single();
-
-      if (!existingRef) {
-        toast.error("This reference is not associated with the selected payer");
-        return;
-      }
-
-      // Move the payment from unallocated_payments to payments
-      const { data: unallocatedPayment, error: fetchError } = await supabase
-        .from("unallocated_payments")
-        .select("*")
-        .eq("transaction_reference", reference)
-        .eq("organization_id", organizationId)
-        .single();
-
-      if (fetchError || !unallocatedPayment) {
-        toast.error("Failed to fetch unallocated payment");
-        return;
-      }
-
-      const { error: insertError } = await supabase.from("payments").insert({
-        amount: unallocatedPayment.amount,
-        date: unallocatedPayment.date,
-        transaction_reference: unallocatedPayment.transaction_reference, // Add null check
-        bank_statement_id: unallocatedPayment.bank_statement_id,
-        organization_id: organizationId,
-        created_at: new Date().toISOString(),
-      });
-
-      if (insertError) throw insertError;
-
-      // Delete the unallocated payment
-      const { error: deleteError } = await supabase
-        .from("unallocated_payments")
-        .delete()
-        .eq(
-          "unallocated_payment_id",
-          unallocatedPayment.unallocated_payment_id
-        );
-
-      if (deleteError) throw deleteError;
-
-      toast.success("Payment assigned successfully");
-      onAssigned();
-      onOpenChange(false);
-    } catch (error) {
-      toast.error("Failed to assign payment");
-      console.error(error);
-    }
-  }
-
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Assign Payment to Existing Payer</DialogTitle>
@@ -130,23 +81,23 @@ export function AssignPayementModal({
           <div className="space-y-2">
             {isLoading ? (
               <div>Loading payers...</div>
-            ) : (
-              payers?.map((payer) => (
-                <div
+            ) : payers && payers.length > 0 ? (
+              payers.map((payer) => (
+                <PayerAssignmentCard
                   key={payer.user_id}
-                  className="flex items-center justify-between p-2 border rounded hover:bg-accent"
-                >
-                  <div>
-                    <div>
-                      {payer.first_name} {payer.last_name}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {payer.email}
-                    </div>
-                  </div>
-                  <Button onClick={() => assignPayment(payer)}>Assign</Button>
-                </div>
+                  payer={payer}
+                  unallocatedPayment={unallocatedPayment}
+                  organizationId={organizationId}
+                  onAssigned={() => {
+                    onAssigned();
+                    onOpenChange(false);
+                  }}
+                />
               ))
+            ) : (
+              <div className="text-center text-muted-foreground py-4">
+                No payers found for this organization.
+              </div>
             )}
           </div>
         </div>
@@ -154,3 +105,5 @@ export function AssignPayementModal({
     </Dialog>
   );
 }
+
+

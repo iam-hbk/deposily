@@ -23,7 +23,7 @@ const formSchema = z.object({
   last_name: z.string().min(2).max(50),
   email: z.string().email(),
   phone_number: z.string(),
-  reference: z.string(),
+  reference: z.string().min(1, "Please provide a reference"),
 });
 
 interface NewPayerFormProps {
@@ -70,10 +70,15 @@ export function NewPayerForm({ reference, organizationId }: NewPayerFormProps) {
         const { data: payer, error: payerError } = await supabase
           .from("payers")
           .insert({
-            ...values,
+            email: values.email,
+            phone_number: values.phone_number,
+            first_name: values.first_name,
+            last_name: values.last_name,
+
           })
           .select()
           .single();
+        console.log("payer created -> ", payer);
 
         if (payerError) throw payerError;
 
@@ -85,7 +90,7 @@ export function NewPayerForm({ reference, organizationId }: NewPayerFormProps) {
               payer_id: payer.user_id,
               organization_id: organizationId,
               reference_details: reference || values.reference,
-            });
+            }).select();
 
           if (referenceError) throw referenceError;
         }
@@ -185,7 +190,11 @@ export function NewPayerForm({ reference, organizationId }: NewPayerFormProps) {
             </FormItem>
           )}
         />
-        <Button type="submit" disabled={mutation.isPending}>
+        <Button
+          type="submit"
+          disabled={mutation.isPending}
+          className="col-span-full"
+        >
           {mutation.isPending ? "Creating..." : "Create Payer"}
         </Button>
       </form>

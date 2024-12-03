@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { parseFile } from "@/lib/parsers/ai-parser";
 import { NextRequest, NextResponse } from "next/server";
+import { Database } from "@/lib/supabase/database.types";
+
 
 export async function GET(
   req: NextRequest,
@@ -38,10 +40,141 @@ export async function GET(
   }
 }
 
+
+
+type Transaction = {
+  amount: number;
+  date: string;
+  transaction_reference: string;
+};
+
+type PaymentInsert = Database["public"]["Tables"]["payments"]["Insert"];
+type UnallocatedPaymentInsert =
+  Database["public"]["Tables"]["unallocated_payments"]["Insert"];
+
+type ProcessingResult = {
+  allocated: number;
+  unallocated: number;
+};
+
+async function processTransactions(
+  supabase: ReturnType<typeof createClient>,
+  transactions: Transaction[],
+  organizationId: number,
+  statementId: number
+): Promise<ProcessingResult> {
+  // Normalize and collect all references
+  const normalizedReferences = transactions.map((t) =>
+    t.transaction_reference.toLowerCase().trim()
+  );
+
+  // Fetch references with their associated payer information for this organization
+  const { data: existingReferences, error: refsError } = await supabase
+    .from("references")
+    .select(`
+      reference_details,
+      payer_id,
+      payer:payers!references_payer_id_fkey (
+        user_id,
+        first_name,
+        last_name,
+        email
+      )
+    `)
+    .eq("organization_id", organizationId)
+    .in("reference_details", normalizedReferences);
+
+  if (refsError) {
+    throw new Error(`Error fetching references: ${refsError.message}`);
+  }
+
+  // Create a map for quick reference lookup that includes payer info
+  const referenceMap = new Map(
+    existingReferences.map((ref) => [
+      ref.reference_details?.toLowerCase(),
+      ref.payer // Now includes the full payer object
+    ])
+  );
+
+  // Prepare batch inserts
+  const paymentsToInsert: PaymentInsert[] = [];
+  const unallocatedToInsert: UnallocatedPaymentInsert[] = [];
+  const now = new Date().toISOString();
+
+  // Process each transaction
+  transactions.forEach((transaction) => {
+    const normalizedRef = transaction.transaction_reference.toLowerCase().trim();
+    const payer = referenceMap.get(normalizedRef);
+
+    const baseTransaction = {
+      amount: transaction.amount,
+      date: transaction.date,
+      transaction_reference: normalizedRef,
+      bank_statement_id: statementId,
+      organization_id: organizationId,
+      created_at: now,
+    };
+
+    if (payer?.user_id) {
+      paymentsToInsert.push({
+        ...baseTransaction,
+        payer_id: payer.user_id,
+      });
+    } else {
+      unallocatedToInsert.push(baseTransaction);
+    }
+  });
+
+  // Batch insert payments
+  if (paymentsToInsert.length > 0) {
+    const { error: paymentsError } = await supabase
+      .from("payments")
+      .insert(paymentsToInsert)
+      .select(); // Added select to verify insertion
+
+    if (paymentsError) {
+      throw new Error(`Error inserting payments: ${paymentsError.message}`);
+    }
+  }
+
+  // Batch insert unallocated payments
+  if (unallocatedToInsert.length > 0) {
+    const { error: unallocatedError } = await supabase
+      .from("unallocated_payments")
+      .insert(unallocatedToInsert);
+
+    if (unallocatedError) {
+      throw new Error(
+        `Error inserting unallocated payments: ${unallocatedError.message}`
+      );
+    }
+  }
+
+  return {
+    allocated: paymentsToInsert.length,
+    unallocated: unallocatedToInsert.length,
+  };
+}
+
+type ApiResponse = {
+  data?: {
+    statement: Database["public"]["Tables"]["bank-statements"]["Row"];
+    processing: {
+      totalTransactions: number;
+      allocatedPayments: number;
+      unallocatedPayments: number;
+    } | null;
+  };
+  error?: {
+    message: string;
+    details?: Record<string, boolean | string>;
+  };
+};
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { organizationId: string } }
-) {
+): Promise<NextResponse<ApiResponse>> {
   const supabase = createClient();
   let uploadedFilePath: string | undefined;
 
@@ -55,7 +188,36 @@ export async function POST(
 
     if (!file || !fileName || !orgCreatedBy || !orgName) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        {
+          error: {
+            message: "Missing required fields",
+            details: {
+              file: !file,
+              fileName: !fileName,
+              orgCreatedBy: !orgCreatedBy,
+              orgName: !orgName,
+            },
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    const allowedTypes = [
+      "text/csv",
+      "application/vnd.ms-excel",
+      "application/pdf",
+    ] as const;
+    type AllowedFileType = (typeof allowedTypes)[number];
+
+    if (!allowedTypes.includes(file.type as AllowedFileType)) {
+      return NextResponse.json(
+        {
+          error: {
+            message:
+              "Invalid file type. Please upload a CSV, Excel, or PDF file.",
+          },
+        },
         { status: 400 }
       );
     }
@@ -65,26 +227,35 @@ export async function POST(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        {
+          error: {
+            message: "Unauthorized",
+          },
+        },
+        { status: 401 }
+      );
     }
 
     // Start transaction
     await supabase.rpc("begin_transaction");
 
     try {
-      // Upload file to storage
-      const fileBuffer = await file.arrayBuffer();
+      const timestamp = new Date().getTime();
       const fileExt = `.${file.name.split(".").pop()}`;
       const filePath =
-        `${orgCreatedBy}/${params.organizationId}-${orgName}/${fileName}${fileExt}`
-          .trimStart()
+        `${orgCreatedBy}/${params.organizationId}/${timestamp}-${fileName}${fileExt}`
+          .toLowerCase()
+          .trim()
           .replace(/[^a-z0-9_.-\/]/gi, "-");
 
+      const fileBuffer = await file.arrayBuffer();
       const { error: uploadError, data: uploadData } = await supabase.storage
         .from("organization-files")
         .upload(filePath, fileBuffer, {
           cacheControl: "3600",
           upsert: false,
+          contentType: file.type,
           metadata: {
             organization_id: params.organizationId,
             uploaded_by: user.id,
@@ -95,18 +266,11 @@ export async function POST(
         });
 
       if (uploadError) {
-        if (uploadError.message === "The resource already exists") {
-          return NextResponse.json(
-            { error: "File already exists" },
-            { status: 400 }
-          );
-        }
-        throw uploadError;
+        throw new Error(`Upload error: ${uploadError.message}`);
       }
 
       uploadedFilePath = uploadData.path;
 
-      // Get public URL
       const {
         data: { publicUrl },
       } = supabase.storage
@@ -114,109 +278,92 @@ export async function POST(
         .getPublicUrl(uploadData.path);
 
       if (!publicUrl) {
-        throw new Error("Error getting public URL");
+        throw new Error("Failed to generate public URL");
       }
 
-      // Create bank statement record within transaction
       const { data: statementData, error: insertError } = await supabase
         .from("bank-statements")
         .insert({
           file_path: publicUrl,
           file_type: file.type,
           organization_id: parseInt(params.organizationId),
-          processed: processFile,
+          processed: false,
           uploaded_at: new Date().toISOString(),
           uploaded_by: user.id,
         })
         .select()
         .single();
 
-      if (insertError) {
-        throw insertError;
+      if (insertError || !statementData) {
+        throw new Error(`Database insert error: ${insertError?.message}`);
       }
 
-      // Process transactions if needed
+      let processingResults: ProcessingResult | null = null;
+
       if (processFile) {
-        const result = await parseFile(file);
+        const parseResult = await parseFile(file);
 
-        if ("code" in result) {
-          throw new Error(result.message);
+        if ("code" in parseResult) {
+          throw new Error(`File parsing error: ${parseResult.message}`);
         }
 
-        for (const transaction of result.transactions) {
-          const { data: existingRef } = await supabase
-            .from("references")
-            .select("*")
-            .eq("reference_details", transaction.transaction_reference)
-            .eq("organization_id", parseInt(params.organizationId))
-            .single();
+        processingResults = await processTransactions(
+          supabase,
+          parseResult.transactions,
+          parseInt(params.organizationId),
+          statementData.file_id
+        );
 
-          if (existingRef) {
-            // Insert into payments if reference exists
-            const { error: paymentsError } = await supabase.from("payments").insert({
-              amount: transaction.amount,
-              date: transaction.date,
-              transaction_reference: transaction.transaction_reference,
-              bank_statement_id: statementData.file_id,
-              organization_id: parseInt(params.organizationId),
-              created_at: new Date().toISOString(),
-            });
-
-            if (paymentsError) {
-              throw paymentsError;
-            }
-          } else {
-            // Insert into unallocated_payments if no reference
-            const { error: unallocatedError } = await supabase.from("unallocated_payments").insert({
-              amount: transaction.amount,
-              date: transaction.date,
-              transaction_reference: transaction.transaction_reference,
-              organization_id: parseInt(params.organizationId),
-              bank_statement_id: statementData.file_id,
-              created_at: new Date().toISOString(),
-            });
-
-            if (unallocatedError) {
-              throw unallocatedError;
-            }
-          }
-        }
-
-        // Update bank statement as processed
         const { error: updateError } = await supabase
           .from("bank-statements")
           .update({ processed: true })
           .eq("file_id", statementData.file_id);
 
         if (updateError) {
-          throw updateError;
+          throw new Error(
+            `Error updating statement status: ${updateError.message}`
+          );
         }
       }
 
-      // Commit transaction
       await supabase.rpc("commit_transaction");
 
-      return NextResponse.json({ data: statementData });
+      return NextResponse.json({
+        data: {
+          statement: statementData,
+          processing: processingResults
+            ? {
+                totalTransactions:
+                  processingResults.allocated + processingResults.unallocated,
+                allocatedPayments: processingResults.allocated,
+                unallocatedPayments: processingResults.unallocated,
+              }
+            : null,
+        },
+      });
     } catch (error) {
-      // Rollback transaction on any error
       await supabase.rpc("rollback_transaction");
 
-      // If we uploaded a file, try to delete it
       if (uploadedFilePath) {
         await supabase.storage
           .from("organization-files")
           .remove([uploadedFilePath])
-          .catch((error) =>
-            console.error("Error cleaning up uploaded file:", error)
-          );
+          .catch(console.error);
       }
 
-      throw error; // Re-throw to be caught by outer catch block
+      throw error;
     }
   } catch (error) {
     console.error("Error processing request:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: {
+          message: "Failed to process file",
+          details: {
+            message: error instanceof Error ? error.message : "Unknown error",
+          },
+        },
+      },
       { status: 500 }
     );
   }
