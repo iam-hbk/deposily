@@ -1,3 +1,5 @@
+import { MergeDeep } from "type-fest"
+
 export type Json =
   | string
   | number
@@ -638,3 +640,19 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
     ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+// Custom types
+export type PayerWithReferences = MergeDeep<
+  Tables<"payers">,
+  { references: Tables<"references">[] }
+>;
+export type OrganizationWithPayers = MergeDeep<
+  Tables<"organizations">,
+  {
+    payers: PayerWithReferences[];
+  }
+>;
+
+export type OrganizationWithAdminProfiles = MergeDeep<
+  Tables<"organizations">,
+  { admins: Tables<"profiles">[] }
+>;

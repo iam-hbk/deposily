@@ -152,21 +152,19 @@ export default function NotificationsDropdown({
   notifications: initialNotifications = [],
   userId,
 }: {
-  notifications: Notification[];
+  notifications?: Notification[];
   userId: string;
 }) {
   const [open, setOpen] = useState(false);
-  const { data: notifications = initialNotifications } = useQuery<
-    Notification[]
-  >({
+  const { data: liveNotifications = initialNotifications } = useQuery<Notification[]>({
     queryKey: NOTIFICATIONS_QUERY_KEY(userId),
     queryFn: () => fetchNotifications(userId),
-    enabled: true,
-    // staleTime: 30000,
-    // refetchOnWindowFocus: false,
+    initialData: initialNotifications,
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
   });
 
-  const unreadCount = notifications.filter(
+  const unreadCount = liveNotifications.filter(
     (notification: Notification) => !notification.read
   ).length;
 
@@ -191,7 +189,7 @@ export default function NotificationsDropdown({
         <div className="flex items-center justify-between p-4 border-b">
           <h4 className="font-semibold">Notifications</h4>
         </div>
-        <NotificationsList notifications={notifications} userId={userId} />
+        <NotificationsList notifications={liveNotifications} userId={userId} />
       </PopoverContent>
     </Popover>
   );
