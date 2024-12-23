@@ -26,33 +26,29 @@ async function getPayersWithPaymentStatus(
 ): Promise<PayerWithPaymentStatus[]> {
   const supabase = createClient();
 
-  // First get all references for this organization with their payers
-  const { data: organizationPayers, error: refsError } = await supabase
-    .from("references")
+  // First get all payers for this organization
+  const { data: organizationPayers, error: payersError } = await supabase
+    .from("payers")
     .select(
       `
-      payer_id,
-      payers (
-        *,
-        payments (
-          amount,
-          date,
-          transaction_reference,
-          payment_id
-        )
+      *,
+      payments (
+        amount,
+        date,
+        transaction_reference,
+        payment_id
+      ),
+      references (
+        reference_details
       )
     `
     )
     .eq("organization_id", organizationId);
 
-  if (refsError) throw refsError;
+  if (payersError) throw payersError;
 
-  // Filter out any null payers and transform the data
-  const payers = organizationPayers
-    .map((ref) => ref.payers)
-    .filter((payer): payer is NonNullable<typeof payer> => payer !== null);
-
-  return payers.map((payer) => {
+  // Transform the data
+  return organizationPayers.map((payer) => {
     const payments = payer.payments || [];
     const sortedPayments = payments.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -60,6 +56,8 @@ async function getPayersWithPaymentStatus(
 
     const lastPayment = sortedPayments[0];
     const lastPaymentDate = lastPayment ? new Date(lastPayment.date) : null;
+    const references = payer.references || [];
+    const reference = references.length > 0 ? references[0].reference_details : null;
 
     let paymentStatus: "Paid" | "Pending" | "Owing" = "Owing";
     if (lastPaymentDate) {
@@ -81,8 +79,9 @@ async function getPayersWithPaymentStatus(
       last_name: payer.last_name,
       phone_number: payer.phone_number,
       user_id: payer.user_id,
+      organization_id: payer.organization_id,
       lastPaymentDate,
-      reference: lastPayment.transaction_reference,
+      reference,
       paymentStatus,
     };
   });
@@ -117,7 +116,7 @@ export default async function PayersPage({
             </DialogHeader>
             <NewPayerForm
               organizationId={Number(params.id)}
-              reference={undefined}
+              reference=""
             />
           </DialogContent>
         </Dialog>

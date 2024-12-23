@@ -104,7 +104,7 @@ export function UnallocatedPaymentsTable({
               <DropdownMenuItem
                 onClick={() =>
                   router.push(
-                    `/dashboard/organizations/${organizationId}/payers`
+                    `/dashboard/payers/new?reference=${payment.transaction_reference}&organizationId=${organizationId}&paymentId=${payment.unallocated_payment_id}`
                   )
                 }
               >

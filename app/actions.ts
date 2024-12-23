@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { encodedRedirect } from "@/lib/utils";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
@@ -137,3 +138,20 @@ export const signOutAction = async () => {
   await supabase.auth.signOut();
   return redirect("/sign-in");
 };
+
+export async function markNotificationsAsRead(userId: string) {
+  const supabase = createClient();
+  
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('user_id', userId)
+    .eq('read', false);
+
+  if (error) {
+    console.error('Error marking notifications as read:', error);
+    throw new Error('Failed to mark notifications as read');
+  }
+
+  revalidatePath('/');
+}

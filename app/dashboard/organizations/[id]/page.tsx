@@ -6,32 +6,29 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { PayersTable } from "@/components/payers-table";
 import { PaymentsTable } from "@/components/payments-table";
 import { UnallocatedPaymentsTable } from "@/components/unallocated-payments-table";
 import { Separator } from "@/components/ui/separator";
 
 import { notFound } from "next/navigation";
 import { Tables } from "@/lib/supabase/database.types";
+import { createPaymentNotification } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic"; // or use revalidate = 0
 
-type PayerWithPaymentStatus = {
-  email: string;
-  first_name: string;
-  last_name: string | null;
-  phone_number: string;
-  user_id: string;
-} & {
+type Payer = Tables<"payers">;
+
+type PayerWithPaymentStatus = Payer & {
   lastPaymentDate: Date | null;
   paymentStatus: "Paid" | "Pending" | "Owing";
-  reference:string;
+  reference: string;
 };
 
 type OrganizationWithReferences = Tables<"organizations"> & {
   references: Array<{
     payers: Tables<"payers"> | null;
     payer_id: string;
+    reference_details: string;
   }>;
 };
 
@@ -64,6 +61,20 @@ async function getOrganizationData(id: string): Promise<{
     return { organization: null, payersWithStatus: [] };
   }
 
+  // Get or create payment check record
+  let lastChecked = new Date(0).toISOString();
+  
+  if (organization.created_by) {
+    const { data: paymentCheck } = await supabase
+      .from("payment_checks")
+      .select("last_checked_at")
+      .eq("organization_id", id)
+      .eq("user_id", organization.created_by)
+      .single();
+
+    lastChecked = paymentCheck?.last_checked_at || lastChecked;
+  }
+
   // Fetch all payments for this organization's payers
   const payerIds = organization.references
     .map((ref) => ref.payer_id)
@@ -73,7 +84,7 @@ async function getOrganizationData(id: string): Promise<{
     .from("payments")
     .select("*")
     .in("payer_id", payerIds)
-    .order("date", { ascending: false });
+    .order('date', { ascending: false });
 
   if (paymentsError) {
     console.error("Error fetching payments:", paymentsError.message);
@@ -83,11 +94,51 @@ async function getOrganizationData(id: string): Promise<{
     };
   }
 
+  // Check for new payments and create notifications
+  const newPayments = payments?.filter(payment => new Date(payment.date) > new Date(lastChecked)) || [];
+  
+  for (const payment of newPayments) {
+    const payer = organization.references
+      .find(ref => ref.payer_id === payment.payer_id)
+      ?.payers;
+      
+    if (payer && organization.created_by) {
+      try {
+        await createPaymentNotification({
+          userId: organization.created_by,
+          payerName: `${payer.first_name} ${payer.last_name}`,
+          amount: payment.amount,
+          organizationName: organization.name,
+        });
+      } catch (error) {
+        console.error('Error creating notification:', error);
+      }
+    }
+  }
+
+  // Update the last checked timestamp
+  if (newPayments.length > 0 && organization.created_by) {
+    const { error: updateError } = await supabase
+      .from("payment_checks")
+      .upsert({
+        user_id: organization.created_by,
+        organization_id: parseInt(id),
+        last_checked_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('Error updating payment check:', updateError);
+    }
+  }
+
   // Transform payers data with payment status
   const payersWithStatus: PayerWithPaymentStatus[] = organization.references
-    .map((reference) => reference.payers)
-    .filter((payer): payer is Tables<"payers"> => payer !== null)
-    .map((payer) => {
+    .map((reference) => {
+      if (!reference.payers) return null;
+      const payer = reference.payers;
+      
       const payerPayments =
         payments?.filter((payment) => payment.payer_id === payer.user_id) || [];
       const lastPayment = payerPayments[0];
@@ -109,16 +160,13 @@ async function getOrganizationData(id: string): Promise<{
       }
 
       return {
-        email: payer.email,
-        first_name: payer.first_name,
-        last_name: payer.last_name,
-        phone_number: payer.phone_number,
-        user_id: payer.user_id,
-        reference: lastPayment.transaction_reference,
+        ...payer,
+        reference: reference.reference_details || 'N/A',
         lastPaymentDate,
         paymentStatus,
       };
-    });
+    })
+    .filter((payer): payer is PayerWithPaymentStatus => payer !== null);
 
   return {
     organization: organization as OrganizationWithReferences,
@@ -183,11 +231,13 @@ export default async function OrganizationPage({
     {
       title: "Created At",
       description: "Date the organization was created",
-      value: new Date(organization.created_at).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }),
+      value: organization.created_at 
+        ? new Date(organization.created_at).toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })
+        : "N/A",
     },
   ];
 
@@ -204,7 +254,7 @@ export default async function OrganizationPage({
         ))}
       </div>
 
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle>Payers</CardTitle>
           <CardDescription>Manage payers for this organization</CardDescription>
@@ -212,7 +262,7 @@ export default async function OrganizationPage({
         <CardContent>
           <PayersTable payers={payersWithStatus} organizationId={params.id} />
         </CardContent>
-      </Card>
+      </Card> */}
 
       <div className="space-y-4">
         <UnallocatedPaymentsTable organizationId={parseInt(params.id)} />

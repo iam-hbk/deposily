@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 const formSchema = z.object({
   first_name: z.string().min(2).max(50),
@@ -29,11 +29,17 @@ const formSchema = z.object({
 interface NewPayerFormProps {
   reference: string | undefined;
   organizationId: number;
+  paymentId?: string;
 }
 
-export function NewPayerForm({ reference, organizationId }: NewPayerFormProps) {
+export function NewPayerForm({
+  reference,
+  organizationId,
+  paymentId,
+}: NewPayerFormProps) {
   const router = useRouter();
   const supabase = createClient();
+  const queryClient = useQueryClient();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -53,7 +59,7 @@ export function NewPayerForm({ reference, organizationId }: NewPayerFormProps) {
         const { data: existingRef } = await supabase
           .from("references")
           .select("*")
-          .eq("reference_details", reference || values.reference)
+          .eq("reference_details", values.reference)
           .eq("organization_id", organizationId)
           .single();
 
@@ -74,25 +80,65 @@ export function NewPayerForm({ reference, organizationId }: NewPayerFormProps) {
             phone_number: values.phone_number,
             first_name: values.first_name,
             last_name: values.last_name,
-
+            organization_id: organizationId,
           })
           .select()
           .single();
-        console.log("payer created -> ", payer);
 
         if (payerError) throw payerError;
 
-        // Create reference if provided
-        if (reference || values.reference) {
-          const { error: referenceError } = await supabase
-            .from("references")
-            .insert({
-              payer_id: payer.user_id,
-              organization_id: organizationId,
-              reference_details: reference || values.reference,
-            }).select();
+        // Create reference
+        const { error: refError } = await supabase.from("references").insert({
+          payer_id: payer.user_id,
+          reference_details: values.reference,
+          organization_id: organizationId,
+        });
 
-          if (referenceError) throw referenceError;
+        if (refError) {
+          throw refError;
+        }
+
+        // If there's an unallocated payment, assign it using the API
+        if (paymentId) {
+          // Get the unallocated payment details
+          const { data: unallocatedPayment, error: unallocatedError } =
+            await supabase
+              .from("unallocated_payments")
+              .select("*")
+              .eq("unallocated_payment_id", parseInt(paymentId))
+              .single();
+
+          if (unallocatedError) {
+            console.error(
+              "Error fetching unallocated payment:",
+              unallocatedError
+            );
+            throw unallocatedError;
+          }
+
+          if (!unallocatedPayment) {
+            throw new Error("Unallocated payment not found");
+          }
+
+          // Use the API to assign the payment
+          const response = await fetch(
+            `/api/organizations/${organizationId}/payments/assign`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                payer,
+                unallocatedPayment,
+              }),
+            }
+          );
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || "Failed to assign payment");
+          }
         }
 
         await supabase.rpc("commit_transaction");
@@ -104,6 +150,10 @@ export function NewPayerForm({ reference, organizationId }: NewPayerFormProps) {
     },
     onSuccess: () => {
       toast.success("Payer created successfully");
+      queryClient.invalidateQueries({ queryKey: ["payments", organizationId] });
+      queryClient.invalidateQueries({
+        queryKey: ["unallocated_payments", organizationId],
+      });
       router.push(`/dashboard/organizations/${organizationId}`);
       router.refresh();
     },

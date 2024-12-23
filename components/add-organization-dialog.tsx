@@ -61,19 +61,32 @@ export function AddOrganizationModal() {
   });
 
   const createOrganization = async (data: OrganizationForm) => {
-    const newOrg: TablesInsert<"organizations"> = {
-      name: data.name,
-      type: data.type,
-      // Other fields will be automatically handled by Supabase
-    };
+    const { data: { user } } = await supabase.auth.getUser();
 
-    const { data: createdOrg, error } = await supabase
-      .from("organizations")
-      .insert([newOrg])
-      .select();
+    if (!user) {
+      throw new Error("User not authenticated");
+    }
 
-    if (error) throw error;
-    return createdOrg[0];
+    try {
+      // Create the organization
+      const newOrg: TablesInsert<"organizations"> = {
+        name: data.name,
+        type: data.type,
+        created_by: user.id,
+      };
+
+      const { data: createdOrg, error: orgError } = await supabase
+        .from("organizations")
+        .insert([newOrg])
+        .select()
+        .single();
+
+      if (orgError) throw orgError;
+
+      return createdOrg;
+    } catch (error) {
+      throw error;
+    }
   };
 
   const mutation = useMutation({

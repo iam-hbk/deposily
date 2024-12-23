@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { createClient } from "@/lib/supabase/server";
 import UserProfileModal from "./user-profile-dialog";
 import { User } from "@supabase/supabase-js";
+import NotificationsDropdown from "./notifications-dropdown";
 
 export default async function AuthButton({ user }: { user: User | null }) {
   if (!hasEnvVars) {
@@ -105,7 +106,7 @@ export default async function AuthButton({ user }: { user: User | null }) {
 
   return (
     <div className="flex items-center gap-4">
-      {/* Hey, {user.email}! */}
+      <NotificationsDropdown userId={user.id} />
       <UserProfileModal user={user} profile={data} />
       <form action={signOutAction}>
         <Button type="submit" variant={"outline"}>
