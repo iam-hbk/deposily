@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-  getPaginationRowModel,
-  getSortedRowModel,
-  SortingState,
-} from "@tanstack/react-table";
+import { formatDistanceToNow } from "date-fns";
 import {
   Table,
   TableBody,
@@ -17,225 +9,156 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type ColumnDef,
+} from "@tanstack/react-table";
+import { type Tables } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/client";
-import { Tables } from "@/lib/supabase/database.types";
-import { format } from "date-fns";
+import { useEffect, useState } from "react";
 
-// Base type from Supabase response
-type PaymentWithPayer = Tables<"payments"> & {
-  payer: Tables<"payers">;
-};
+type PayerDetails = Tables<"payers">;
 
-// Extended type with additional fields
-type PaymentWithDetails = PaymentWithPayer & {
-  has_reference: boolean;
+type PaymentWithPayer = {
+  amount: number;
+  bank_statement_id: number;
+  created_at: string | null;
+  date: string;
+  organization_id: number | null;
+  payer_id: string | null;
+  payment_id: number;
+  reference_on_deposit: string | null;
+  transaction_reference: string;
+  updated_at: string | null;
+  payer: PayerDetails | null;
 };
 
 interface PaymentsTableProps {
-  organizationId: number;
+  data?: PaymentWithPayer[];
+  organizationId?: number;
 }
 
-export function PaymentsTable({ organizationId }: PaymentsTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const supabase = createClient();
+const columns: ColumnDef<PaymentWithPayer>[] = [
+  {
+    accessorKey: "payer",
+    header: "Payer",
+    cell: ({ row }) => {
+      const payer = row.original.payer;
+      return payer ? `${payer.first_name} ${payer.last_name || ''}` : 'N/A';
+    },
+  },
+  {
+    accessorKey: "amount",
+    header: "Amount",
+    cell: ({ row }) => `$${row.original.amount}`,
+  },
+  {
+    accessorKey: "status",
+    header: "Status",
+    cell: () => (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+        completed
+      </span>
+    ),
+  },
+  {
+    accessorKey: "created_at",
+    header: "Date",
+    cell: ({ row }) => {
+      const date = row.original.created_at;
+      return date ? formatDistanceToNow(new Date(date), { addSuffix: true }) : 'N/A';
+    },
+  },
+];
 
-  const { data: payments, isLoading } = useQuery({
-    queryKey: ["payments", organizationId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("payments")
-        .select(
-          `
+export function PaymentsTable({ data, organizationId }: PaymentsTableProps) {
+  const [payments, setPayments] = useState<PaymentWithPayer[]>(data || []);
+  const [isLoading, setIsLoading] = useState(!data && !!organizationId);
+
+  useEffect(() => {
+    if (organizationId && !data) {
+      const fetchPayments = async () => {
+        setIsLoading(true);
+        const supabase = createClient();
+        const { data: paymentsData } = await supabase
+          .from("payments")
+          .select(`
             *,
-            payer:payers!payments_payer_id_fkey (
-              first_name,
-              last_name,
-              email,
-              phone_number,
-              user_id
-            )
-          `
-        )
-        .eq("organization_id", organizationId)
-        .order("date", { ascending: false });
-      if (error) throw error;
+            payer:payer_id (*)
+          `)
+          .eq("organization_id", organizationId)
+          .order("created_at", { ascending: false });
 
-      // Transform the data to include has_reference
-      const transformedData: PaymentWithDetails[] = (
-        data as PaymentWithPayer[]
-      ).map((payment) => ({
-        ...payment,
-        has_reference: false, // Set this based on your business logic
-      }));
+        if (paymentsData) {
+          const typedPayments = paymentsData.map(payment => ({
+            ...payment,
+            payer: payment.payer ? (payment.payer as unknown as PayerDetails) : null
+          }));
+          setPayments(typedPayments);
+        }
+        setIsLoading(false);
+      };
 
-      return transformedData;
-      // return data;
-    },
-  });
-
-  const columns: ColumnDef<PaymentWithDetails>[] = [
-    {
-      accessorKey: "date",
-      header: "Date",
-      cell: ({ row }) => format(new Date(row.getValue("date")), "dd/MM/yyyy"),
-    },
-    {
-      accessorKey: "payer",
-      header: "Payer",
-      cell: ({ row }) => {
-        const payer = row.getValue("payer") as Tables<"payers"> | null;
-        if (!payer) return "Unknown";
-        return (
-          <div className="flex flex-col">
-            <span className="font-medium">
-              {payer.first_name} {payer.last_name}
-            </span>
-            <span className="text-sm text-gray-500">{payer.email}</span>
-          </div>
-        );
-      },
-    },
-    {
-      accessorKey: "transaction_reference",
-      header: "Reference",
-      cell: ({ row }) => {
-        const reference = row.getValue("transaction_reference") as
-          | string
-          | null;
-
-        return (
-          <div className="flex items-center gap-2">
-            <span>{reference}</span>
-            {/* {reference && !hasReference && (
-              <Badge variant="secondary">New Reference</Badge>
-            )} */}
-          </div>
-        );
-      },
-    },
-    {
-      accessorKey: "reference_on_deposit",
-      header: "Reference Used on Deposit",
-      cell: ({ row }) => {
-        const reference = row.getValue("reference_on_deposit") as string | null;
-
-        return (
-          <div className="flex items-center gap-2">
-            <span>{reference ? reference : "same"}</span>
-          </div>
-        );
-      },
-    },
-    {
-      accessorKey: "payer.phone_number",
-      header: "Phone",
-      cell: ({ row }) => {
-        const payer = row.original.payer;
-        return payer?.phone_number || "N/A";
-      },
-    },
-    {
-      accessorKey: "amount",
-      header: "Amount",
-      cell: ({ row }) => {
-        const amount = parseFloat(row.getValue("amount"));
-        const formatted = new Intl.NumberFormat("en-GB", {
-          style: "currency",
-          currency: "ZAR",
-        }).format(amount);
-        return formatted;
-      },
-    },
-  ];
+      fetchPayments();
+    } else if (data) {
+      setPayments(data);
+    }
+  }, [organizationId, data]);
 
   const table = useReactTable({
-    data: payments || [],
+    data: payments,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    onSortingChange: setSorting,
-    state: {
-      sorting,
-    },
   });
 
   if (isLoading) {
-    return <div>Loading payments...</div>;
+    return <div className="py-8 text-center">Loading payments...</div>;
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Payments</h2>
-        <Button>Add Payment</Button>
-      </div>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <TableHead key={header.id}>
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(
+                        header.column.columnDef.header,
+                        header.getContext()
+                      )}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows?.length ? (
+            table.getRowModel().rows.map((row) => (
+              <TableRow
+                key={row.id}
+                data-state={row.getIsSelected() && "selected"}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
                 ))}
               </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  No payments found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          Next
-        </Button>
-      </div>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={4} className="h-24 text-center">
+                No results.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }
